@@ -3,7 +3,7 @@
 -- 1. Categories table
 CREATE TABLE IF NOT EXISTS public.categories (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     type TEXT NOT NULL CHECK (type IN ('obligation', 'loisir', 'savings', 'income')),
     icon TEXT,
     color TEXT,
@@ -33,18 +33,47 @@ CREATE TABLE IF NOT EXISTS public.recurring_obligations (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 4. Enable Row Level Security (RLS)
-ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.recurring_obligations ENABLE ROW LEVEL SECURITY;
+-- 4. User Profiles (Settings)
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID REFERENCES auth.users(id) PRIMARY KEY,
+    monthly_savings_goal NUMERIC DEFAULT 0,
+    full_name TEXT,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
 
--- 5. Policies (Simple: users can see/edit their own data)
-CREATE POLICY "Users can see all categories" ON public.categories FOR SELECT TO authenticated USING (true);
+-- 5. Budgets table (Spending limits per category)
+CREATE TABLE IF NOT EXISTS public.budgets (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) NOT NULL,
+    category_id UUID REFERENCES public.categories(id) NOT NULL,
+    amount NUMERIC NOT NULL DEFAULT 0,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(user_id, category_id, month, year)
+);
 
-CREATE POLICY "Users can see their own transactions" ON public.transactions FOR SELECT TO authenticated USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert their own transactions" ON public.transactions FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+-- Enable RLS
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.budgets ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can manage their own obligations" ON public.recurring_obligations FOR ALL TO authenticated USING (auth.uid() = user_id);
+-- Policies
+CREATE POLICY "Users can manage their own profile" ON public.profiles FOR ALL TO authenticated USING (auth.uid() = id);
+CREATE POLICY "Users can manage their own budgets" ON public.budgets FOR ALL TO authenticated USING (auth.uid() = user_id);
+
+-- Trigger to create profile on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name');
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- 6. Insert default categories
 INSERT INTO public.categories (name, type, icon) VALUES
@@ -52,6 +81,10 @@ INSERT INTO public.categories (name, type, icon) VALUES
 ('Electricité', 'obligation', 'zap'),
 ('Tontine', 'obligation', 'users'),
 ('Internet', 'obligation', 'globe'),
+('Ration', 'obligation', 'shopping-cart'),
+('Eau', 'obligation', 'droplets'),
+('Dette', 'income', 'hand-coins'),
+('Remboursement dette', 'obligation', 'credit-card'),
 ('Restaurant', 'loisir', 'utensils'),
 ('Sport', 'loisir', 'dumbbell'),
 ('Shopping', 'loisir', 'shopping-bag'),
