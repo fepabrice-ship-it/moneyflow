@@ -89,5 +89,7 @@ INSERT INTO public.categories (name, type, icon) VALUES
 ('Sport', 'loisir', 'dumbbell'),
 ('Shopping', 'loisir', 'shopping-bag'),
 ('Salaire', 'income', 'briefcase'),
-('Freelance', 'income', 'laptop')
+('Freelance', 'income', 'laptop'),
+('Achats divers', 'loisir', 'shopping-cart'),
+('Epargne Projet', 'savings', 'target')
 ON CONFLICT DO NOTHING;

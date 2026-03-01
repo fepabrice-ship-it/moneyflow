@@ -33,9 +33,10 @@ const Budgets = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Parallel fetching: categories, existing budgets, and transactions for this month
-      const startOfMonth = new Date(currentYear, currentMonth - 1, 1).toISOString();
-      const endOfMonth = new Date(currentYear, currentMonth, 0, 23, 59, 59).toISOString();
+      // Local date range to avoid ISO/Timezone shifts
+      const startOfMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+      const lastDay = new Date(currentYear, currentMonth, 0).getDate();
+      const endOfMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
       const [catRes, budgetRes, txRes] = await Promise.all([
         supabase.from('categories').select('*').order('name'),

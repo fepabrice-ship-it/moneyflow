@@ -37,12 +37,14 @@ const Dashboard = forwardRef((props, ref) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Current month range
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-
-      const endOfMonth = new Date(startOfMonth.getFullYear(), startOfMonth.getMonth() + 1, 0, 23, 59, 59);
+      // Current month range (Local Date Strings YYYY-MM-DD)
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+      
+      const startOfMonth = `${year}-${month}-01`;
+      const endOfMonth = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
       // Parallel fetching
       const [obsRes, txRes, monthTxRes, profileRes] = await Promise.all([
@@ -50,8 +52,8 @@ const Dashboard = forwardRef((props, ref) => {
         supabase.from('transactions').select('*, categories(name, type)').eq('user_id', user.id).order('date', { ascending: false }).limit(5),
         supabase.from('transactions').select('*, categories(name, type)')
           .eq('user_id', user.id)
-          .gte('date', startOfMonth.toISOString())
-          .lte('date', endOfMonth.toISOString()),
+          .gte('date', startOfMonth)
+          .lte('date', endOfMonth),
         supabase.from('profiles').select('monthly_savings_goal').eq('id', user.id).single()
       ]);
 
@@ -126,7 +128,10 @@ const Dashboard = forwardRef((props, ref) => {
       <section className="space-y-4">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-bold">Activité Récente</h2>
-          <button className="text-primary text-xs font-semibold uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity">
+          <button 
+            onClick={props.onViewAll}
+            className="text-primary text-xs font-semibold uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
+          >
             Tout voir
           </button>
         </div>

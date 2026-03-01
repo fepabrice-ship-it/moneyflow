@@ -14,6 +14,7 @@ import Dashboard from './components/Dashboard';
 import TransactionModal from './components/TransactionModal';
 import Settings from './components/Settings';
 import Budgets from './components/Budgets';
+import TransactionsList from './components/TransactionsList';
 
 const App = () => {
   const [session, setSession] = useState(null);
@@ -106,14 +107,17 @@ const App = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 p-6 md:p-10 max-w-5xl mx-auto w-full pb-32 lg:pb-10">
-        {activeTab === 'dashboard' && <Dashboard ref={dashboardRef} />}
+        {activeTab === 'dashboard' && (
+          <Dashboard 
+            ref={dashboardRef} 
+            onViewAll={() => setActiveTab('transactions')} 
+          />
+        )}
         {activeTab === 'budgets' && <Budgets />}
         {activeTab === 'settings' && <Settings />}
-        {['transactions'].includes(activeTab) && (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground italic">
-            Module {activeTab} en cours de développement...
-          </div>
-        )}
+        {activeTab === 'transactions' && <TransactionsList />}
+        {/* Other future modules */}
+
       </main>
 
       {/* Mobile Sticky Add Button */}
