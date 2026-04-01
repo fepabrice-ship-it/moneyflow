@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Save, Loader2, Target, User, Shield } from 'lucide-react';
+import { Save, Loader2, Target, User, Shield, LogOut } from 'lucide-react';
 
 const Settings = () => {
   const [loading, setLoading] = useState(false);
@@ -114,7 +114,7 @@ const Settings = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-white text-black h-14 rounded-2xl font-black text-lg flex items-center justify-center gap-3 hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-white/5"
+          className="w-full bg-white text-black h-14 rounded-2xl font-black text-lg flex items-center justify-center gap-3 hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-white/5 cursor-pointer"
         >
           {loading ? <Loader2 className="animate-spin" size={24} /> : (
             <>
@@ -122,6 +122,19 @@ const Settings = () => {
               Enregistrer les modifications
             </>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={async () => {
+            if (confirm('Voulez-vous vraiment vous déconnecter ?')) {
+              await supabase.auth.signOut();
+            }
+          }}
+          className="w-full bg-red-500/10 text-red-500 h-14 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-red-500/20 active:scale-95 transition-all cursor-pointer border border-red-500/20"
+        >
+          <LogOut size={20} />
+          Se déconnecter (Changer de compte)
         </button>
       </form>
     </div>
