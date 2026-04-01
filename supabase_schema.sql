@@ -93,5 +93,8 @@ INSERT INTO public.categories (name, type, icon) VALUES
 ('Achats divers', 'loisir', 'shopping-cart'),
 ('Epargne Projet', 'savings', 'target'),
 ('Achats produits', 'loisir', 'package'),
-('Frais de livraison', 'obligation', 'truck')
+('Frais de livraison', 'obligation', 'truck'),
+('Investissement', 'savings', 'trending-up'),
+('Vente', 'income', 'tag'),
+('Dedommagement', 'income', 'shield-check')
 ON CONFLICT (name) DO NOTHING;
