@@ -6,31 +6,54 @@ import {
   ArrowUpRight, 
   ArrowDownLeft, 
   Trash2, 
+  Pencil,
   Loader2,
   Calendar,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronDown,
+  Tag,
+  User
 } from 'lucide-react';
 
-const TransactionsList = () => {
+import { useProject } from '../contexts/ProjectContext';
+
+const TransactionsList = ({ onEdit }) => {
+  const { currentProject, members } = useProject();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all'); // all, income, expense
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [memberFilter, setMemberFilter] = useState('all');
   
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
   useEffect(() => {
-    fetchTransactions();
-  }, [selectedMonth, selectedYear, typeFilter]);
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    if (currentProject) {
+      fetchTransactions();
+    }
+    
+    const handleRefresh = () => fetchTransactions();
+    window.addEventListener('refresh-data', handleRefresh);
+    return () => window.removeEventListener('refresh-data', handleRefresh);
+  }, [selectedMonth, selectedYear, typeFilter, categoryFilter, memberFilter, currentProject]);
+
+  const fetchCategories = async () => {
+    const { data } = await supabase.from('categories').select('*').order('name');
+    if (data) setCategories(data);
+  };
 
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
 
       const startOfMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
       const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
@@ -38,14 +61,22 @@ const TransactionsList = () => {
 
       let query = supabase
         .from('transactions')
-        .select('*, categories(name, type)')
-        .eq('user_id', user.id)
+        .select('*, categories(name, type), profiles(full_name)')
+        .eq('project_id', currentProject.id)
         .gte('date', startOfMonth)
         .lte('date', endOfMonth)
         .order('date', { ascending: false });
 
       if (typeFilter !== 'all') {
         query = query.eq('type', typeFilter);
+      }
+
+      if (categoryFilter !== 'all') {
+        query = query.eq('category_id', categoryFilter);
+      }
+
+      if (memberFilter !== 'all') {
+        query = query.eq('user_id', memberFilter);
       }
 
       const { data, error } = await query;
@@ -64,6 +95,7 @@ const TransactionsList = () => {
       const { error } = await supabase.from('transactions').delete().eq('id', id);
       if (error) throw error;
       setTransactions(transactions.filter(t => t.id !== id));
+      window.dispatchEvent(new CustomEvent('refresh-data'));
     } catch (err) {
       alert(err.message);
     }
@@ -162,33 +194,77 @@ const TransactionsList = () => {
         </div>
       </div>
 
-      {/* Filters & Search */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
-          <input 
-            type="text"
-            placeholder="Rechercher une opération..."
-            className="w-full bg-white/5 border border-white/5 rounded-2xl py-3 pl-12 pr-4 outline-none focus:border-primary transition-all text-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      {/* Filters & Search - NO LONGER STICKY */}
+      <div className="bg-transparent space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+            <input 
+              type="text"
+              placeholder="Rechercher une opération..."
+              className="w-full bg-white/5 border border-white/5 rounded-2xl py-3 pl-12 pr-4 outline-none focus:border-primary transition-all text-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          
+          <div className="flex gap-2">
+            {['all', 'expense', 'income'].map((type) => (
+              <button
+                key={type}
+                onClick={() => setTypeFilter(type)}
+                className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border ${
+                  typeFilter === type 
+                  ? 'bg-white text-black border-white' 
+                  : 'bg-white/5 text-muted-foreground border-white/5 hover:border-white/10'
+                }`}
+              >
+                {type === 'all' ? 'Touts' : type === 'expense' ? 'Dépenses' : 'Revenus'}
+              </button>
+            ))}
+          </div>
         </div>
-        
-        <div className="flex gap-2">
-          {['all', 'expense', 'income'].map((type) => (
-            <button
-              key={type}
-              onClick={() => setTypeFilter(type)}
-              className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border ${
-                typeFilter === type 
-                ? 'bg-white text-black border-white' 
-                : 'bg-white/5 text-muted-foreground border-white/5 hover:border-white/10'
-              }`}
+
+        <div className="grid grid-cols-2 gap-3">
+          {/* Category Select */}
+          <div className="relative">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-primary pointer-events-none">
+              <Tag size={14} />
+            </div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl py-3 pl-10 pr-10 text-xs font-bold uppercase tracking-wider outline-none focus:border-primary appearance-none transition-all text-white"
             >
-              {type === 'all' ? 'Touts' : type === 'expense' ? 'Dépenses' : 'Revenus'}
-            </button>
-          ))}
+              <option value="all" className="bg-[#1a1a1a]">Toutes les catégories</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.id} className="bg-[#1a1a1a]">{cat.name}</option>
+              ))}
+            </select>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary pointer-events-none">
+              <ChevronDown size={18} strokeWidth={3} />
+            </div>
+          </div>
+
+          {/* Member Select */}
+          <div className="relative">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-primary pointer-events-none">
+              <User size={14} />
+            </div>
+            <select
+              value={memberFilter}
+              onChange={(e) => setMemberFilter(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl py-3 pl-10 pr-10 text-xs font-bold uppercase tracking-wider outline-none focus:border-primary appearance-none transition-all text-white"
+            >
+              <option value="all" className="bg-[#1a1a1a]">Tous les membres</option>
+              {members.map(m => (
+                <option key={m.id} value={m.id} className="bg-[#1a1a1a]">{m.full_name}</option>
+              ))}
+            </select>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary pointer-events-none">
+              <ChevronDown size={18} strokeWidth={3} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -207,27 +283,40 @@ const TransactionsList = () => {
                 </div>
                 <div>
                   <p className="font-bold text-base">{tx.description}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter bg-white/5 px-2 py-0.5 rounded">
                       {tx.categories?.name || 'Général'}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
                       {new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(tx.date))}
                     </span>
+                    <span className="text-[10px] text-white/20">•</span>
+                    <span className="text-[10px] text-primary/70 font-medium">
+                      {tx.profiles?.full_name || 'Responsable inconnu'}
+                    </span>
                   </div>
                 </div>
               </div>
               
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 md:gap-4">
                 <span className={`font-black text-lg ${tx.type === 'income' ? 'text-green-500' : 'text-white'}`}>
                   {tx.type === 'income' ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(tx.amount)} FCFA
                 </span>
-                <button 
-                  onClick={() => handleDelete(tx.id)}
-                  className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
-                >
-                  <Trash2 size={18} />
-                </button>
+                
+                <div className="flex items-center gap-1 transition-all">
+                  <button 
+                    onClick={() => onEdit(tx)}
+                    className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-xl transition-all cursor-pointer"
+                  >
+                    <Pencil size={18} />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(tx.id)}
+                    className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all cursor-pointer"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </div>
             </div>
           ))

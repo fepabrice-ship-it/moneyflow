@@ -12,8 +12,10 @@ import {
   Loader2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useProject } from '../contexts/ProjectContext';
 
-const Dashboard = forwardRef((props, ref) => {
+const Dashboard = (props) => {
+  const { currentProject } = useProject();
   const [safeToSpend, setSafeToSpend] = useState(0);
   const [spent, setSpent] = useState(0);
   const [obligations, setObligations] = useState(0);
@@ -21,23 +23,17 @@ const Dashboard = forwardRef((props, ref) => {
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useImperativeHandle(ref, () => ({
-    refresh: () => {
+  useEffect(() => {
+    if (currentProject) {
       fetchData();
     }
-  }));
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  }, [currentProject]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Current month range (Local Date Strings YYYY-MM-DD)
+      
+      // Current month range
       const now = new Date();
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -46,36 +42,42 @@ const Dashboard = forwardRef((props, ref) => {
       const startOfMonth = `${year}-${month}-01`;
       const endOfMonth = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
-      // Parallel fetching
+      // Parallel fetching scoped to project
       const [obsRes, txRes, monthTxRes, profileRes] = await Promise.all([
-        supabase.from('recurring_obligations').select('amount').eq('user_id', user.id).eq('is_active', true),
-        supabase.from('transactions').select('*, categories(name, type)').eq('user_id', user.id).order('date', { ascending: false }).limit(5),
-        supabase.from('transactions').select('*, categories(name, type)')
-          .eq('user_id', user.id)
+        supabase.from('recurring_obligations')
+          .select('amount')
+          .eq('project_id', currentProject.id)
+          .eq('is_active', true),
+        supabase.from('transactions')
+          .select('*, categories(name, type), profiles:user_id(full_name)')
+          .eq('project_id', currentProject.id)
+          .order('date', { ascending: false })
+          .limit(5),
+        supabase.from('transactions')
+          .select('amount, type')
+          .eq('project_id', currentProject.id)
           .gte('date', startOfMonth)
           .lte('date', endOfMonth),
-        supabase.from('profiles').select('monthly_savings_goal').eq('id', user.id).single()
+        supabase.from('profiles')
+          .select('monthly_savings_goal')
+          .eq('id', currentProject.owner_id) // Goal typically tied to owner for now
+          .single()
       ]);
 
       const totalObligations = obsRes.data?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
       setObligations(totalObligations);
       setSavingsGoal(profileRes.data?.monthly_savings_goal || 0);
 
-      // Calculations for current month
       let monthlyIncome = 0;
       let monthlySpent = 0;
 
       monthTxRes.data?.forEach(tx => {
         const amount = Number(tx.amount);
-        if (tx.type === 'income') {
-          monthlyIncome += amount;
-        } else {
-          monthlySpent += amount;
-        }
+        if (tx.type === 'income') monthlyIncome += amount;
+        else monthlySpent += amount;
       });
       
       setSpent(monthlySpent);
-      // Reste à Vivre = Income - Obligations - Spending
       setSafeToSpend(Math.max(0, monthlyIncome - totalObligations - monthlySpent));
       setRecentTransactions(txRes.data || []);
       
@@ -144,7 +146,11 @@ const Dashboard = forwardRef((props, ref) => {
                 </div>
                 <div>
                   <p className="font-semibold text-sm">{tx.description}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase">{tx.categories?.name || 'Général'}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] text-muted-foreground uppercase">{tx.categories?.name || 'Général'}</p>
+                    <span className="text-[10px] text-white/20">•</span>
+                    <p className="text-[10px] text-primary/70 font-medium">{tx.profiles?.full_name || 'Responsable inconnu'}</p>
+                  </div>
                 </div>
               </div>
               <span className={`font-bold ${tx.type === 'income' ? 'text-green-500' : 'text-white'}`}>
@@ -159,6 +165,6 @@ const Dashboard = forwardRef((props, ref) => {
       </section>
     </div>
   );
-});
+};
 
 export default Dashboard;

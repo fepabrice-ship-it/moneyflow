@@ -11,12 +11,15 @@ import {
   Receipt
 } from 'lucide-react';
 
+import { useProject } from '../contexts/ProjectContext';
+
 const Budgets = () => {
+  const { currentProject } = useProject();
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
   const [budgets, setBudgets] = useState({});
   const [spendingByCat, setSpendingByCat] = useState({});
-  const [showEdit, setShowEdit] = useState(null); // id of the category being edited
+  const [showEdit, setShowEdit] = useState(null);
   const [editValue, setEditValue] = useState('');
 
   const now = new Date();
@@ -24,24 +27,32 @@ const Budgets = () => {
   const currentYear = now.getFullYear();
 
   useEffect(() => {
-    fetchBudgetData();
-  }, []);
+    if (currentProject) {
+      fetchBudgetData();
+    }
+  }, [currentProject]);
 
   const fetchBudgetData = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Local date range to avoid ISO/Timezone shifts
+      
       const startOfMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
       const lastDay = new Date(currentYear, currentMonth, 0).getDate();
       const endOfMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
       const [catRes, budgetRes, txRes] = await Promise.all([
         supabase.from('categories').select('*').order('name'),
-        supabase.from('budgets').select('*').eq('user_id', user.id).eq('month', currentMonth).eq('year', currentYear),
-        supabase.from('transactions').select('amount, category_id').eq('user_id', user.id).gte('date', startOfMonth).lte('date', endOfMonth).eq('type', 'expense')
+        supabase.from('budgets')
+          .select('*')
+          .eq('project_id', currentProject.id)
+          .eq('month', currentMonth)
+          .eq('year', currentYear),
+        supabase.from('transactions')
+          .select('amount, category_id')
+          .eq('project_id', currentProject.id)
+          .gte('date', startOfMonth)
+          .lte('date', endOfMonth)
+          .eq('type', 'expense')
       ]);
 
       setCategories(catRes.data || []);
@@ -72,12 +83,13 @@ const Budgets = () => {
       const amount = parseFloat(editValue);
       
       const { error } = await supabase.from('budgets').upsert({
-        user_id: user.id,
+        project_id: currentProject.id,
+        user_id: user.id, // Still track who set the budget
         category_id: catId,
         amount: amount,
         month: currentMonth,
         year: currentYear
-      }, { onConflict: ['user_id', 'category_id', 'month', 'year'] });
+      }, { onConflict: ['project_id', 'category_id', 'month', 'year'] });
 
       if (error) throw error;
       
@@ -85,7 +97,7 @@ const Budgets = () => {
       setShowEdit(null);
       setEditValue('');
     } catch (err) {
-      alert(err.message);
+      console.error(err);
     }
   };
 
