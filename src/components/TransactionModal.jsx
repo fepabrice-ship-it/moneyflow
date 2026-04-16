@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, Save, Receipt, DollarSign, Calendar, Tag, Check } from 'lucide-react';
+import { X, Loader2, Save, Receipt, DollarSign, Calendar, Tag, Check, AlertCircle, Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useProject } from '../contexts/ProjectContext';
 
@@ -13,7 +13,11 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
     type: 'expense',
     category_id: '',
     user_id: '',
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    exclude_from_global: false,
+    quantity: 1,
+    town: '',
+    product_id: ''
   });
 
   useEffect(() => {
@@ -25,7 +29,11 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
           type: editingTransaction.type,
           category_id: editingTransaction.category_id,
           user_id: editingTransaction.user_id,
-          date: editingTransaction.date
+          date: editingTransaction.date,
+          exclude_from_global: editingTransaction.exclude_from_global || false,
+          quantity: editingTransaction.quantity || 1,
+          town: editingTransaction.town || '',
+          product_id: editingTransaction.product_id || ''
         });
       } else {
         // Default for new transaction
@@ -37,14 +45,27 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
               description: '',
               amount: '',
               type: 'expense',
-              date: new Date().toISOString().split('T')[0]
+              date: new Date().toISOString().split('T')[0],
+              exclude_from_global: false,
+              quantity: 1,
+              town: '',
+              product_id: ''
             }));
           }
         });
       }
       fetchCategories();
+      fetchProducts();
     }
   }, [isOpen, editingTransaction]);
+
+  const [products, setProducts] = useState([]);
+
+  const fetchProducts = async () => {
+    if (!currentProject) return;
+    const { data } = await supabase.from('products').select('*').eq('project_id', currentProject.id).order('name');
+    if (data) setProducts(data);
+  };
 
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('*').order('name');
@@ -65,6 +86,8 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
       const payload = {
         ...formData,
         amount: parseFloat(formData.amount),
+        quantity: parseFloat(formData.quantity) || 1,
+        product_id: formData.product_id === '' ? null : formData.product_id,
         project_id: currentProject.id
       };
 
@@ -132,118 +155,192 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
             </button>
           </div>
 
-          <div className="space-y-3">
-            {/* Amount Input */}
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Montant (FCFA)</label>
-              <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                <input
-                  type="number"
-                  required
-                  placeholder="0"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  className="w-full bg-background border border-white/5 rounded-xl py-3 pl-12 pr-4 text-xl font-black focus:border-primary outline-none transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Description */}
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Description</label>
-              <div className="relative">
-                <Receipt className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                <input
-                  type="text"
-                  required
-                  placeholder="Libellé..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-12 pr-4 text-sm focus:border-primary outline-none transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Category */}
+          <div className="space-y-4">
+            <div className="space-y-3">
+              {/* Amount Input */}
               <div className="space-y-1.5">
-                <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Catégorie</label>
+                <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Montant (FCFA)</label>
                 <div className="relative">
-                  <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <input
+                    type="number"
+                    required
+                    placeholder="0"
+                    value={formData.amount}
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    className="w-full bg-background border border-white/5 rounded-xl py-3 pl-12 pr-4 text-xl font-black focus:border-primary outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Description</label>
+                <div className="relative">
+                  <Receipt className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Libellé..."
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-12 pr-4 text-sm focus:border-primary outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Product Selection */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Produit concerné (Optionnel)</label>
+                <div className="relative">
+                  <Package className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                   <select
-                    value={formData.category_id}
-                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                    value={formData.product_id}
+                    onChange={(e) => setFormData({ ...formData, product_id: e.target.value })}
                     className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none appearance-none transition-all"
                   >
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    <option value="">-- Aucun produit --</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} ({new Intl.NumberFormat('fr-FR').format(p.purchase_price)} FCFA)</option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              {/* Date */}
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Date</label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none transition-all"
-                  />
+              <div className="grid grid-cols-2 gap-3">
+                {/* Category */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Catégorie</label>
+                  <div className="relative">
+                    <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                    <select
+                      value={formData.category_id}
+                      onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                      className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none appearance-none transition-all"
+                    >
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Date */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Date</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Quantity & Town */}
+              <div className={`grid grid-cols-2 gap-3 p-3 rounded-2xl border transition-all duration-300 ${categories.find(c => c.id === formData.category_id)?.name === 'Vente' ? 'bg-primary/5 border-primary/20 scale-[1.02]' : 'bg-transparent border-transparent'}`}>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-1">
+                    <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Quantité / Unités</label>
+                    {categories.find(c => c.id === formData.category_id)?.name === 'Vente' && <span className="text-[7px] font-black text-primary uppercase">Requis pour Vente</span>}
+                  </div>
+                  <div className="relative">
+                    <Receipt className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="1"
+                      value={formData.quantity}
+                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                      className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Ville</label>
+                  <div className="relative">
+                    <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                    <input
+                      type="text"
+                      placeholder="Ex: Douala"
+                      value={formData.town}
+                      onChange={(e) => setFormData({ ...formData, town: e.target.value })}
+                      className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+
+              {/* Exclusion Toggle */}
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, exclude_from_global: !formData.exclude_from_global })}
+                  className="w-full flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${formData.exclude_from_global ? 'bg-primary border-primary' : 'bg-transparent border-white/20'}`}>
+                      {formData.exclude_from_global && <Check size={10} className="text-white" />}
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-tight text-white">Exclure du solde global</span>
+                  </div>
+                  <AlertCircle size={14} className="text-muted-foreground opacity-50" />
+                </button>
+                <p className="text-[8px] text-muted-foreground leading-tight px-6 italic">Activez ceci pour les injections de capital ou reports de solde afin de ne pas fausser le bilan à vie du projet.</p>
+              </div>
+
+              {/* Responsible Person Selector (Compact) */}
+              <div className="border-t border-white/5 pt-3">
+                <label className="text-[9px] font-bold uppercase tracking-widest text-primary ml-1 block mb-2">Responsable</label>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  {members.map((m) => {
+                    const isSelected = formData.user_id === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, user_id: m.id })}
+                        className={`flex items-center gap-2 p-2 rounded-xl border transition-all text-left ${
+                          isSelected 
+                          ? 'bg-primary/10 border-primary' 
+                          : 'bg-background border-white/5'
+                        }`}
+                      >
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
+                          isSelected ? 'bg-primary text-white' : 'bg-white/5 text-muted-foreground'
+                        }`}>
+                          {m.full_name?.charAt(0).toUpperCase() || '?'}
+                        </div>
+                        <p className={`text-[10px] font-bold truncate ${isSelected ? 'text-white' : 'text-muted-foreground'}`}>
+                          {m.full_name}
+                        </p>
+                        {isSelected && <Check size={10} className="text-primary ml-auto" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
-            {/* Responsible Person Selector (Compact) */}
-            <div className="border-t border-white/5 pt-3">
-              <label className="text-[9px] font-bold uppercase tracking-widest text-primary ml-1 block mb-2">Responsable</label>
-              
-              <div className="grid grid-cols-2 gap-2">
-                {members.map((m) => {
-                  const isSelected = formData.user_id === m.id;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, user_id: m.id })}
-                      className={`flex items-center gap-2 p-2 rounded-xl border transition-all text-left ${
-                        isSelected 
-                        ? 'bg-primary/10 border-primary' 
-                        : 'bg-background border-white/5'
-                      }`}
-                    >
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
-                        isSelected ? 'bg-primary text-white' : 'bg-white/5 text-muted-foreground'
-                      }`}>
-                        {m.full_name?.charAt(0).toUpperCase() || '?'}
-                      </div>
-                      <p className={`text-[10px] font-bold truncate ${isSelected ? 'text-white' : 'text-muted-foreground'}`}>
-                        {m.full_name}
-                      </p>
-                      {isSelected && <Check size={10} className="text-primary ml-auto" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-white text-black h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-white/5 cursor-pointer"
+            >
+              {loading ? <Loader2 className="animate-spin" size={20} /> : (
+                <>
+                  <Save size={16} />
+                  {editingTransaction ? 'Enregistrer' : 'Créer'}
+                </>
+              )}
+            </button>
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-white text-black h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-white/5 cursor-pointer"
-          >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : (
-              <>
-                <Save size={16} />
-                {editingTransaction ? 'Enregistrer' : 'Créer'}
-              </>
-            )}
-          </button>
         </form>
       </div>
     </div>

@@ -55,7 +55,8 @@ export const ProjectProvider = ({ children, session }) => {
           projects:project_id (
             id,
             name,
-            owner_id
+            owner_id,
+            type
           )
         `)
         .eq('user_id', session.user.id);
@@ -74,7 +75,6 @@ export const ProjectProvider = ({ children, session }) => {
       const defaultProject = lastProject || projectList[0];
       
       if (defaultProject) {
-        // Only trigger member fetch if actually switching or first load
         selectProject(defaultProject);
       }
     } catch (err) {
@@ -89,13 +89,13 @@ export const ProjectProvider = ({ children, session }) => {
     if (session?.user) {
       fetchProjects();
     }
-  }, [session?.user?.id]); // Depend on ID instead of full session object
+  }, [session?.user?.id]);
 
-  const createProject = useCallback(async (name) => {
+  const createProject = useCallback(async (name, type = 'standard') => {
     try {
       const { data: project, error: pError } = await supabase
         .from('projects')
-        .insert([{ name, owner_id: session.user.id }])
+        .insert([{ name, type, owner_id: session.user.id }])
         .select()
         .single();
 
@@ -115,17 +115,17 @@ export const ProjectProvider = ({ children, session }) => {
     }
   }, [session?.user?.id, fetchProjects]);
 
-  const renameProject = useCallback(async (projectId, newName) => {
+  const updateProject = useCallback(async (projectId, updates) => {
     try {
       const { error } = await supabase
         .from('projects')
-        .update({ name: newName })
+        .update(updates)
         .eq('id', projectId);
       
       if (error) throw error;
       await fetchProjects();
     } catch (err) {
-      console.error('Error renaming project:', err);
+      console.error('Error updating project:', err);
       throw err;
     }
   }, [fetchProjects]);
@@ -137,9 +137,9 @@ export const ProjectProvider = ({ children, session }) => {
     loading: loading && projects.length === 0, 
     selectProject, 
     createProject,
-    renameProject,
+    updateProject,
     refreshProjects: fetchProjects
-  }), [projects, currentProject, members, loading, selectProject, createProject, renameProject, fetchProjects]);
+  }), [projects, currentProject, members, loading, selectProject, createProject, updateProject, fetchProjects]);
 
   return (
     <ProjectContext.Provider value={value}>

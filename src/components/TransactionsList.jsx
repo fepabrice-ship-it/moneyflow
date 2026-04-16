@@ -13,10 +13,17 @@ import {
   ChevronRight,
   ChevronDown,
   Tag,
-  User
+  User,
+  Globe,
+  CheckCircle2,
+  CheckSquare,
+  Square,
+  Check,
+  X
 } from 'lucide-react';
 
 import { useProject } from '../contexts/ProjectContext';
+import BulkEditModal from './BulkEditModal';
 
 const TransactionsList = ({ onEdit }) => {
   const { currentProject, members } = useProject();
@@ -27,10 +34,15 @@ const TransactionsList = ({ onEdit }) => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [memberFilter, setMemberFilter] = useState('all');
+  const [viewMode, setViewMode] = useState('monthly'); // 'monthly' or 'all'
   
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+
+  // Bulk Selection State
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkModal, setShowBulkModal] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -44,7 +56,7 @@ const TransactionsList = ({ onEdit }) => {
     const handleRefresh = () => fetchTransactions();
     window.addEventListener('refresh-data', handleRefresh);
     return () => window.removeEventListener('refresh-data', handleRefresh);
-  }, [selectedMonth, selectedYear, typeFilter, categoryFilter, memberFilter, currentProject]);
+  }, [selectedMonth, selectedYear, typeFilter, categoryFilter, memberFilter, currentProject, viewMode]);
 
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('*').order('name');
@@ -55,17 +67,18 @@ const TransactionsList = ({ onEdit }) => {
     try {
       setLoading(true);
 
-      const startOfMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
-      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
-      const endOfMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
       let query = supabase
         .from('transactions')
         .select('*, categories(name, type), profiles(full_name)')
         .eq('project_id', currentProject.id)
-        .gte('date', startOfMonth)
-        .lte('date', endOfMonth)
         .order('date', { ascending: false });
+
+      if (viewMode === 'monthly') {
+        const startOfMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+        const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+        const endOfMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        query = query.gte('date', startOfMonth).lte('date', endOfMonth);
+      }
 
       if (typeFilter !== 'all') {
         query = query.eq('type', typeFilter);
@@ -95,9 +108,41 @@ const TransactionsList = ({ onEdit }) => {
       const { error } = await supabase.from('transactions').delete().eq('id', id);
       if (error) throw error;
       setTransactions(transactions.filter(t => t.id !== id));
+      setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
       window.dispatchEvent(new CustomEvent('refresh-data'));
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Effacer les ${selectedIds.length} opérations sélectionnées ?`)) return;
+    try {
+      setLoading(true);
+      const { error } = await supabase.from('transactions').delete().in('id', selectedIds);
+      if (error) throw error;
+      
+      setTransactions(transactions.filter(t => !selectedIds.includes(t.id)));
+      setSelectedIds([]);
+      window.dispatchEvent(new CustomEvent('refresh-data'));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSelection = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredTransactions.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredTransactions.map(tx => tx.id));
     }
   };
 
@@ -113,6 +158,7 @@ const TransactionsList = ({ onEdit }) => {
     }
     setSelectedMonth(newMonth);
     setSelectedYear(newYear);
+    if (viewMode !== 'monthly') setViewMode('monthly');
   };
 
   const filteredTransactions = transactions.filter(tx => 
@@ -124,6 +170,7 @@ const TransactionsList = ({ onEdit }) => {
   let totalExpense = 0;
   
   filteredTransactions.forEach(tx => {
+    if (tx.exclude_from_global) return; // Skip technical/carry-over transactions in totals
     if (tx.type === 'income') totalIncome += Number(tx.amount);
     else totalExpense += Number(tx.amount);
   });
@@ -140,18 +187,40 @@ const TransactionsList = ({ onEdit }) => {
           <p className="text-muted-foreground uppercase tracking-widest text-[10px] mt-1">Historique de vos opérations</p>
         </div>
 
-        {/* Month Selector */}
-        <div className="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/5">
-          <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-white/5 rounded-xl transition-all cursor-pointer">
-            <ChevronLeft size={20} />
-          </button>
-          <div className="text-center min-w-[120px]">
-            <p className="text-sm font-bold capitalize">{monthName}</p>
-            <p className="text-[10px] text-muted-foreground">{selectedYear}</p>
+        <div className="flex items-center gap-2">
+           {/* View Toggle */}
+          <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 h-fit">
+            <button 
+              onClick={() => setViewMode('monthly')}
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${
+                viewMode === 'monthly' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
+              }`}
+            >
+              Mensuel
+            </button>
+            <button 
+              onClick={() => setViewMode('all')}
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${
+                viewMode === 'all' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
+              }`}
+            >
+              Global
+            </button>
           </div>
-          <button onClick={() => changeMonth(1)} className="p-2 hover:bg-white/5 rounded-xl transition-all cursor-pointer">
-            <ChevronRight size={20} />
-          </button>
+
+          {/* Month Selector */}
+          <div className={`flex items-center gap-3 bg-white/5 p-1.5 rounded-2xl border border-white/5 transition-opacity ${viewMode === 'all' ? 'opacity-50 grayscale pointer-events-none' : 'opacity-100'}`}>
+            <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-white/5 rounded-xl transition-all cursor-pointer">
+              <ChevronLeft size={18} />
+            </button>
+            <div className="text-center min-w-[100px]">
+              <p className="text-xs font-bold capitalize">{monthName}</p>
+              <p className="text-[9px] text-muted-foreground">{selectedYear}</p>
+            </div>
+            <button onClick={() => changeMonth(1)} className="p-2 hover:bg-white/5 rounded-xl transition-all cursor-pointer">
+              <ChevronRight size={18} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -159,7 +228,9 @@ const TransactionsList = ({ onEdit }) => {
       <div className="glass-card bg-primary/5 border-primary/20 p-6 space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Bilan sélection</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+              {viewMode === 'monthly' ? 'Bilan mensuel' : 'Bilan Global'}
+            </p>
             <p className={`text-4xl font-black mt-1 ${totalFiltered >= 0 ? 'text-green-500' : 'text-red-500'}`}>
               {totalFiltered > 0 ? '+' : ''}{new Intl.NumberFormat('fr-FR').format(totalFiltered)} FCFA
             </p>
@@ -187,10 +258,28 @@ const TransactionsList = ({ onEdit }) => {
           </div>
         </div>
 
-        <div className="pt-4 border-t border-white/5 flex gap-4 text-center">
-          <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">
-            {filteredTransactions.length} Opérations trouvées
-          </span>
+        <div className="pt-4 border-t border-white/5 flex flex-wrap items-center gap-4 justify-between">
+          <div className="flex items-center gap-4">
+            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">
+              {filteredTransactions.length} Opérations trouvées
+            </span>
+            {filteredTransactions.some(tx => tx.exclude_from_global) && (
+              <span className="text-[10px] font-bold uppercase text-primary tracking-widest">
+                • Exclusions techniques
+              </span>
+            )}
+          </div>
+          
+          <button 
+            onClick={toggleSelectAll}
+            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:text-white transition-colors"
+          >
+            {selectedIds.length === filteredTransactions.length && filteredTransactions.length > 0 ? (
+              <><CheckSquare size={14} /> Tout désélectionner</>
+            ) : (
+              <><Square size={14} /> Tout sélectionner</>
+            )}
+          </button>
         </div>
       </div>
 
@@ -274,19 +363,47 @@ const TransactionsList = ({ onEdit }) => {
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>
         ) : filteredTransactions.length > 0 ? (
           filteredTransactions.map((tx) => (
-            <div key={tx.id} className="glass-card p-4 flex items-center justify-between group hover:border-white/10 transition-all">
+            <div key={tx.id} className={`glass-card p-4 flex items-center justify-between group hover:border-white/10 transition-all ${
+              selectedIds.includes(tx.id) ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : ''
+            } ${tx.exclude_from_global ? 'opacity-60 border-dashed bg-white/5' : ''}`}>
               <div className="flex items-center gap-4">
+                {/* Checkbox Trigger */}
+                <button 
+                  onClick={() => toggleSelection(tx.id)}
+                  className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
+                    selectedIds.includes(tx.id) ? 'bg-primary border-primary' : 'bg-white/5 border-white/10 hover:border-primary/50'
+                  }`}
+                >
+                  {selectedIds.includes(tx.id) && <Check size={14} className="text-white" />}
+                </button>
+
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${
                   tx.type === 'income' ? 'bg-green-500/10 text-green-500' : 'bg-white/5 text-muted-foreground'
                 }`}>
                   {tx.type === 'income' ? <ArrowDownLeft size={22} /> : <ArrowUpRight size={22} />}
                 </div>
                 <div>
-                  <p className="font-bold text-base">{tx.description}</p>
+                  <div className="flex items-center gap-2">
+                    <p className={`font-bold text-base ${tx.exclude_from_global ? 'line-through text-muted-foreground' : ''}`}>{tx.description}</p>
+                    {tx.exclude_from_global && (
+                      <span className="text-[7px] font-black bg-primary text-white px-1 py-0.5 rounded uppercase">Interne</span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2 mt-0.5">
                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter bg-white/5 px-2 py-0.5 rounded">
                       {tx.categories?.name || 'Général'}
                     </span>
+                    {tx.quantity > 1 && (
+                      <span className="text-[10px] text-primary font-black bg-primary/10 px-2 py-0.5 rounded">
+                        x{tx.quantity}
+                      </span>
+                    )}
+                    {tx.town && (
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded">
+                        <Globe size={10} />
+                        {tx.town}
+                      </span>
+                    )}
                     <span className="text-[10px] text-muted-foreground">
                       {new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(tx.date))}
                     </span>
@@ -299,7 +416,7 @@ const TransactionsList = ({ onEdit }) => {
               </div>
               
               <div className="flex items-center gap-2 md:gap-4">
-                <span className={`font-black text-lg ${tx.type === 'income' ? 'text-green-500' : 'text-white'}`}>
+                <span className={`font-black text-lg ${tx.exclude_from_global ? 'text-muted-foreground opacity-50' : (tx.type === 'income' ? 'text-green-500' : 'text-white')}`}>
                   {tx.type === 'income' ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(tx.amount)} FCFA
                 </span>
                 
@@ -332,6 +449,56 @@ const TransactionsList = ({ onEdit }) => {
           </div>
         )}
       </div>
+
+      {/* Floating Bulk Action Bar */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-3rem)] max-w-lg bg-black/80 backdrop-blur-2xl border border-primary/30 rounded-2xl p-4 shadow-2xl animate-in slide-in-from-bottom-10 duration-300 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white font-black text-xs">
+              {selectedIds.length}
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-white leading-none">Sélectionnés</p>
+              <p className="text-[8px] text-muted-foreground mt-1 uppercase tracking-widest">Options groupées</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+             <button 
+              onClick={() => setShowBulkModal(true)}
+              className="px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all flex items-center gap-2"
+            >
+              <Pencil size={14} /> Modifier
+            </button>
+            <button 
+              onClick={handleBulkDelete}
+              className="px-4 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 transition-all flex items-center gap-2"
+            >
+              <Trash2 size={14} /> Supprimer
+            </button>
+            <button 
+              onClick={() => setSelectedIds([])}
+              className="p-2 text-muted-foreground hover:text-white transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Edit Modal */}
+      <BulkEditModal 
+        isOpen={showBulkModal}
+        onClose={() => {
+          setShowBulkModal(false);
+          setSelectedIds([]);
+        }}
+        selectedIds={selectedIds}
+        onRefresh={() => {
+          fetchTransactions();
+          window.dispatchEvent(new CustomEvent('refresh-data'));
+        }}
+      />
     </div>
   );
 };

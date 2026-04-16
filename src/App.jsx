@@ -7,7 +7,8 @@ import {
   Settings as SettingsIcon, 
   Plus, 
   LogOut,
-  Loader2
+  Loader2,
+  PieChart
 } from 'lucide-react';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
@@ -15,6 +16,8 @@ import TransactionModal from './components/TransactionModal';
 import Settings from './components/Settings';
 import Budgets from './components/Budgets';
 import TransactionsList from './components/TransactionsList';
+import Statistics from './components/Statistics';
+import Onboarding from './components/Onboarding';
 
 import { ProjectProvider, useProject } from './contexts/ProjectContext';
 
@@ -27,6 +30,10 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
         <Loader2 className="animate-spin text-primary" size={32} />
       </div>
     );
+  }
+
+  if (projects.length === 0) {
+    return <Onboarding />;
   }
 
   return (
@@ -58,7 +65,7 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
         {/* Desktop Sidebar */}
         <aside className="hidden lg:flex flex-col w-64 border-r border-white/5 p-6 h-screen sticky top-0">
           <div className="mb-8">
-            <h1 className="text-xl font-black tracking-tighter">MoneyFlow</h1>
+            <h1 className="text-xl font-black tracking-tighter flex items-center gap-2">MoneyFlow <span className="bg-primary/20 text-primary text-[8px] px-1 rounded">V1.1</span></h1>
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Brayce Edition</p>
           </div>
 
@@ -87,6 +94,7 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
             {[
               { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
               { id: 'budgets', label: 'Budgets', icon: Wallet },
+              { id: 'statistics', label: 'Statistiques', icon: PieChart },
               { id: 'transactions', label: 'Transactions', icon: Receipt },
               { id: 'settings', label: 'Paramètres', icon: SettingsIcon },
             ].map((item) => (
@@ -126,6 +134,7 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
           {activeTab === 'transactions' && (
             <TransactionsList onEdit={setEditingTransaction} />
           )}
+          {activeTab === 'statistics' && <Statistics />}
         </main>
       </div>
 
@@ -160,6 +169,7 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
           {[
             { id: 'dashboard', icon: LayoutDashboard },
             { id: 'budgets', icon: Wallet },
+            { id: 'statistics', icon: PieChart },
             { id: 'transactions', icon: Receipt },
             { id: 'settings', icon: SettingsIcon },
           ].map((item) => (

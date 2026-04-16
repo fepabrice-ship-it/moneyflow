@@ -6,19 +6,47 @@ import {
   User, 
   Save, 
   Loader2, 
-  LogOut 
+  LogOut,
+  ChevronRight,
+  Info
 } from 'lucide-react';
 import { useProject } from '../contexts/ProjectContext';
 
+const PROJECT_TYPES = [
+  { 
+    id: 'standard', 
+    name: 'Standard', 
+    desc: 'Indépendant chaque mois (Usage personnel).',
+    color: 'bg-blue-500'
+  },
+  { 
+    id: 'continuous', 
+    name: 'Flux Continu', 
+    desc: 'Le solde restant est reporté au mois suivant (Projet/Business).',
+    color: 'bg-green-500'
+  },
+  { 
+    id: 'investment', 
+    name: 'Investissement', 
+    desc: 'Distingue Capital initial et Revenus d\'exploitation.',
+    color: 'bg-purple-500'
+  }
+];
+
 const Settings = () => {
-  const { currentProject, createProject, renameProject, refreshProjects } = useProject();
+  const { currentProject, createProject, updateProject, refreshProjects } = useProject();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
+  
   const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectType, setNewProjectType] = useState('standard');
+  
   const [renameProjectName, setRenameProjectName] = useState(currentProject?.name || '');
-  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameProjectType, setRenameProjectType] = useState(currentProject?.type || 'standard');
+  const [isUpdating, setIsUpdating] = useState(false);
+  
   const [profile, setProfile] = useState({
     monthly_savings_goal: 0,
     full_name: ''
@@ -27,6 +55,13 @@ const Settings = () => {
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  useEffect(() => {
+    if (currentProject) {
+      setRenameProjectName(currentProject.name);
+      setRenameProjectType(currentProject.type || 'standard');
+    }
+  }, [currentProject]);
 
   const fetchProfile = async () => {
     try {
@@ -74,17 +109,20 @@ const Settings = () => {
     }
   };
 
-  const handleRename = async (e) => {
+  const handleUpdateCurrentProject = async (e) => {
     e.preventDefault();
     if (!renameProjectName || !currentProject) return;
-    setIsRenaming(true);
+    setIsUpdating(true);
     try {
-      await renameProject(currentProject.id, renameProjectName);
-      alert('Projet renommé !');
+      await updateProject(currentProject.id, { 
+        name: renameProjectName, 
+        type: renameProjectType 
+      });
+      alert('Projet mis à jour !');
     } catch (err) {
       alert(err.message);
     } finally {
-      setIsRenaming(false);
+      setIsUpdating(false);
     }
   };
 
@@ -122,7 +160,7 @@ const Settings = () => {
     e.preventDefault();
     if (!newProjectName) return;
     try {
-      await createProject(newProjectName);
+      await createProject(newProjectName, newProjectType);
       setNewProjectName('');
       alert('Projet créé !');
     } catch (err) {
@@ -139,39 +177,68 @@ const Settings = () => {
         <p className="text-muted-foreground uppercase tracking-widest text-[10px] mt-1">Personnalisez votre MoneyFlow</p>
       </header>
 
-      {/* Project Management Section */}
+      {/* Current Project Config Card */}
       <div className="glass-card space-y-6">
         <div className="flex items-center gap-3 text-primary">
           <Shield size={20} />
-          <h2 className="font-bold">Gestion du Projet Actif</h2>
+          <h2 className="font-bold">Configuration du Projet Actif</h2>
         </div>
 
-        {/* Rename Project (Only for owner) */}
-        {currentProject?.role === 'owner' && (
-          <form onSubmit={handleRename} className="space-y-2 border-b border-white/5 pb-6">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Renommer le projet actuel</label>
-            <div className="flex gap-2">
+        {currentProject?.role === 'owner' ? (
+          <form onSubmit={handleUpdateCurrentProject} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Nom du projet</label>
               <input
                 type="text"
                 value={renameProjectName}
                 onChange={(e) => setRenameProjectName(e.target.value)}
-                className="flex-1 bg-background border border-white/5 rounded-xl py-3 px-4 focus:border-primary outline-none transition-all text-sm font-bold"
-                placeholder="Nouveau nom du projet"
+                className="w-full bg-background border border-white/5 rounded-xl py-3 px-4 focus:border-primary outline-none transition-all text-sm font-bold"
+                placeholder="Ex: Mon Business"
               />
-              <button
-                type="submit"
-                disabled={isRenaming}
-                className="bg-primary text-white px-6 rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer"
-              >
-                {isRenaming ? <Loader2 className="animate-spin" size={18} /> : 'Mettre à jour'}
-              </button>
             </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Type de Logique</label>
+              <div className="grid grid-cols-1 gap-2">
+                {PROJECT_TYPES.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setRenameProjectType(t.id)}
+                    className={`flex items-start gap-4 p-4 rounded-2xl border transition-all text-left ${
+                      renameProjectType === t.id 
+                      ? 'bg-primary/10 border-primary shadow-lg' 
+                      : 'bg-background border-white/5 hover:border-white/10'
+                    }`}
+                  >
+                    <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${renameProjectType === t.id ? 'bg-primary animate-pulse' : 'bg-white/20'}`} />
+                    <div>
+                      <p className="font-bold text-sm">{t.name}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{t.desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isUpdating}
+              className="w-full bg-primary text-white h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-50"
+            >
+              {isUpdating ? <Loader2 className="animate-spin" size={18} /> : 'Mettre à jour le projet'}
+            </button>
           </form>
+        ) : (
+          <div className="p-4 bg-white/5 rounded-xl flex items-center gap-3">
+            <Info size={18} className="text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">Seul le propriétaire peut modifier le type du projet.</p>
+          </div>
         )}
 
-        {/* Invite Member (Only for owner) */}
+        {/* Invite Member */}
         {currentProject?.role === 'owner' && (
-          <form onSubmit={handleInvite} className="space-y-2 border-b border-white/5 pb-6">
+          <form onSubmit={handleInvite} className="space-y-2 pt-6 border-t border-white/5">
             <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Inviter un membre par email</label>
             <div className="flex gap-2">
               <input
@@ -191,25 +258,50 @@ const Settings = () => {
             </div>
           </form>
         )}
+      </div>
 
-        {/* Create New Project */}
-        <form onSubmit={handleCreateProject} className="space-y-2">
-          <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Créer un nouveau projet</label>
-          <div className="flex gap-2">
+      {/* Create New Project Section */}
+      <div className="glass-card space-y-6 border-primary/20 bg-primary/5">
+        <h2 className="font-bold flex items-center gap-2">
+          Nouveau Projet
+          <span className="text-[8px] bg-primary text-white px-1.5 py-0.5 rounded uppercase tracking-tighter">Premium</span>
+        </h2>
+
+        <form onSubmit={handleCreateProject} className="space-y-6">
+          <div className="space-y-2">
             <input
               type="text"
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
-              className="flex-1 bg-background border border-white/5 rounded-xl py-3 px-4 focus:border-primary outline-none transition-all text-sm"
-              placeholder="Nom du projet (ex: Business)"
+              className="w-full bg-background border border-white/5 rounded-xl py-3 px-4 focus:border-primary outline-none transition-all text-sm"
+              placeholder="Nom du projet..."
             />
-            <button
-              type="submit"
-              className="bg-white text-black px-6 rounded-xl font-bold text-sm hover:bg-gray-200 transition-all cursor-pointer"
-            >
-              Créer
-            </button>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {PROJECT_TYPES.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setNewProjectType(t.id)}
+                className={`flex flex-col gap-2 p-3 rounded-xl border text-center transition-all ${
+                  newProjectType === t.id 
+                  ? 'bg-white text-black border-white' 
+                  : 'bg-white/5 text-muted-foreground border-white/5 hover:border-white/10'
+                }`}
+              >
+                <p className="font-black text-[10px] uppercase tracking-widest">{t.name}</p>
+                <p className="text-[8px] opacity-70 leading-tight">{t.desc.split(' (')[0]}</p>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-white text-black h-12 rounded-xl font-black text-sm hover:bg-gray-200 transition-all cursor-pointer"
+          >
+            Lancer le Projet
+          </button>
         </form>
       </div>
 
@@ -263,7 +355,7 @@ const Settings = () => {
           {loading ? <Loader2 className="animate-spin" size={24} /> : (
             <>
               <Save size={20} />
-              Enregistrer les modifications
+              Enregistrer les paramètres
             </>
           )}
         </button>
@@ -278,7 +370,7 @@ const Settings = () => {
           className="w-full bg-red-500/10 text-red-500 h-14 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-red-500/20 active:scale-95 transition-all cursor-pointer border border-red-500/20"
         >
           <LogOut size={20} />
-          Se déconnecter (Changer de compte)
+          Se déconnecter
         </button>
       </form>
     </div>
