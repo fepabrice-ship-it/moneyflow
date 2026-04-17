@@ -164,7 +164,7 @@ const Statistics = () => {
 
       // Initialize detailed inventory for the product in this city
       if (prodId && !cityData[city].inventory[prodId]) {
-        cityData[city].inventory[prodId] = { stockIn: 0, stockOut: 0, balance: 0 };
+        cityData[city].inventory[prodId] = { stockIn: 0, stockOut: 0, balance: 0, stockInAmount: 0 };
       }
 
       // 1. Specific Logic for "Vente" (Revenue/Sales/Inventory)
@@ -184,10 +184,11 @@ const Statistics = () => {
         }
       }
 
-      // 2. Inventory Supply (Investissement)
+      // 2. Inventory Supply (Investissement) - Strictly for stock value
       if (catName === 'Investissement' && prodId) {
         cityData[city].inventory[prodId].stockIn += qty;
         cityData[city].inventory[prodId].balance += qty;
+        cityData[city].inventory[prodId].stockInAmount += amount;
       }
 
       // 3. Publicity Cost
@@ -200,13 +201,14 @@ const Statistics = () => {
     const netProfit = totalRevenue - totalExpenses;
     const averageOrderValue = totalSalesCount > 0 ? totalRevenue / totalSalesCount : 0;
     
-    // Calculate Inventory Value
+    // Calculate Inventory Value based on Actual Investment Costs
     let totalInventoryValue = 0;
     Object.values(cityData).forEach(city => {
       Object.entries(city.inventory).forEach(([pId, data]) => {
-        if (data.balance > 0) {
-          const prod = products.find(p => p.id === pId);
-          if (prod) totalInventoryValue += data.balance * Number(prod.purchase_price);
+        if (data.balance > 0 && data.stockIn > 0) {
+          // Calculate unit cost from actual investments
+          const averageUnitCost = data.stockInAmount / data.stockIn;
+          totalInventoryValue += data.balance * averageUnitCost;
         }
       });
     });
@@ -268,7 +270,7 @@ const Statistics = () => {
         {[
           { label: 'Chiffre d\'Affaires', value: stats.totalRevenue, icon: DollarSign, color: 'text-green-500', bg: 'bg-green-500/10' },
           { label: 'Bénéfice Net', value: stats.netProfit, icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-          { label: 'Valeur du Stock', value: stats.totalInventoryValue, icon: Package, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+          { label: 'Valeur du Stock Restant', value: stats.totalInventoryValue, icon: Package, color: 'text-orange-500', bg: 'bg-orange-500/10' },
           { label: 'Unités Vendues', value: stats.totalPiecesSold, icon: ShoppingBag, color: 'text-purple-500', bg: 'bg-purple-500/10', suffix: ' pcs' },
           { label: 'Panier Moyen', value: stats.averageOrderValue, icon: ArrowUpRight, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
           { label: 'Frais Publicité', value: stats.totalPublicity, icon: Tag, color: 'text-red-500', bg: 'bg-red-500/10' },

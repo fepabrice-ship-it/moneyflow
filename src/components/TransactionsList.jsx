@@ -40,9 +40,12 @@ const TransactionsList = ({ onEdit }) => {
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
-  // Bulk Selection State
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
+
+  // Details Modal State
+  const [txForDetails, setTxForDetails] = useState(null);
+  const [showActionMenu, setShowActionMenu] = useState(null); // id of tx with menu open
 
   useEffect(() => {
     fetchCategories();
@@ -363,77 +366,185 @@ const TransactionsList = ({ onEdit }) => {
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>
         ) : filteredTransactions.length > 0 ? (
           filteredTransactions.map((tx) => (
-            <div key={tx.id} className={`glass-card p-4 flex items-center justify-between group hover:border-white/10 transition-all ${
+            <div key={tx.id} className={`glass-card p-0 overflow-hidden flex flex-col md:flex-row group hover:border-white/10 transition-all ${
               selectedIds.includes(tx.id) ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : ''
             } ${tx.exclude_from_global ? 'opacity-60 border-dashed bg-white/5' : ''}`}>
-              <div className="flex items-center gap-4">
-                {/* Checkbox Trigger */}
-                <button 
-                  onClick={() => toggleSelection(tx.id)}
-                  className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
-                    selectedIds.includes(tx.id) ? 'bg-primary border-primary' : 'bg-white/5 border-white/10 hover:border-primary/50'
-                  }`}
-                >
-                  {selectedIds.includes(tx.id) && <Check size={14} className="text-white" />}
-                </button>
+              
+              {/* Desktop View (Hidden on Mobile) */}
+              <div className="hidden md:flex p-4 items-center justify-between w-full">
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => toggleSelection(tx.id)}
+                    className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
+                      selectedIds.includes(tx.id) ? 'bg-primary border-primary' : 'bg-white/5 border-white/10 hover:border-primary/50'
+                    }`}
+                  >
+                    {selectedIds.includes(tx.id) && <Check size={14} className="text-white" />}
+                  </button>
 
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${
-                  tx.type === 'income' ? 'bg-green-500/10 text-green-500' : 'bg-white/5 text-muted-foreground'
-                }`}>
-                  {tx.type === 'income' ? <ArrowDownLeft size={22} /> : <ArrowUpRight size={22} />}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className={`font-bold text-base ${tx.exclude_from_global ? 'line-through text-muted-foreground' : ''}`}>{tx.description}</p>
-                    {tx.exclude_from_global && (
-                      <span className="text-[7px] font-black bg-primary text-white px-1 py-0.5 rounded uppercase">Interne</span>
-                    )}
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${
+                    tx.type === 'income' ? 'bg-green-500/10 text-green-500' : 'bg-white/5 text-muted-foreground'
+                  }`}>
+                    {tx.type === 'income' ? <ArrowDownLeft size={22} /> : <ArrowUpRight size={22} />}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter bg-white/5 px-2 py-0.5 rounded">
-                      {tx.categories?.name || 'Général'}
-                    </span>
-                    {tx.quantity > 1 && (
-                      <span className="text-[10px] text-primary font-black bg-primary/10 px-2 py-0.5 rounded">
-                        x{tx.quantity}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className={`font-bold text-base ${tx.exclude_from_global ? 'line-through text-muted-foreground' : ''}`}>{tx.description}</p>
+                      {tx.exclude_from_global && (
+                        <span className="text-[7px] font-black bg-primary text-white px-1 py-0.5 rounded uppercase">Interne</span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter bg-white/5 px-2 py-0.5 rounded">
+                        {tx.categories?.name || 'Général'}
                       </span>
-                    )}
-                    {tx.town && (
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded">
-                        <Globe size={10} />
-                        {tx.town}
+                      {tx.quantity > 1 && (
+                        <span className="text-[10px] text-primary font-black bg-primary/10 px-2 py-0.5 rounded">
+                          x{tx.quantity}
+                        </span>
+                      )}
+                      {tx.town && (
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded">
+                          <Globe size={10} />
+                          {tx.town}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(tx.date))}
                       </span>
-                    )}
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(tx.date))}
-                    </span>
-                    <span className="text-[10px] text-white/20">•</span>
-                    <span className="text-[10px] text-primary/70 font-medium">
-                      {tx.profiles?.full_name || 'Responsable inconnu'}
-                    </span>
+                      <span className="text-[10px] text-white/20">•</span>
+                      <span className="text-[10px] text-primary/70 font-medium">
+                        {tx.profiles?.full_name || 'Responsable inconnu'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4">
+                  <span className={`font-black text-lg ${tx.exclude_from_global ? 'text-muted-foreground opacity-50' : (tx.type === 'income' ? 'text-green-500' : 'text-white')}`}>
+                    {tx.type === 'income' ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(tx.amount)} FCFA
+                  </span>
+                  
+                  <div className="flex items-center gap-1 transition-all">
+                    <button 
+                      onClick={() => onEdit(tx)}
+                      className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-xl transition-all cursor-pointer"
+                    >
+                      <Pencil size={18} />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(tx.id)}
+                      className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all cursor-pointer"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-2 md:gap-4">
-                <span className={`font-black text-lg ${tx.exclude_from_global ? 'text-muted-foreground opacity-50' : (tx.type === 'income' ? 'text-green-500' : 'text-white')}`}>
-                  {tx.type === 'income' ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(tx.amount)} FCFA
-                </span>
-                
-                <div className="flex items-center gap-1 transition-all">
-                  <button 
-                    onClick={() => onEdit(tx)}
-                    className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-xl transition-all cursor-pointer"
-                  >
-                    <Pencil size={18} />
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(tx.id)}
-                    className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all cursor-pointer"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+
+              {/* Mobile View (Hidden on Desktop) */}
+              <div className="flex flex-col md:hidden w-full overflow-hidden relative">
+                {/* Description Header (Full Width) */}
+                <div className="p-4 pb-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => toggleSelection(tx.id)}
+                          className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                            selectedIds.includes(tx.id) ? 'bg-primary border-primary' : 'bg-white/5 border-white/20'
+                          }`}
+                        >
+                          {selectedIds.includes(tx.id) && <Check size={12} className="text-white" />}
+                        </button>
+                        <p className={`font-bold text-base leading-tight ${tx.exclude_from_global ? 'line-through text-muted-foreground' : 'text-white'}`}>
+                          {tx.description}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
+                      tx.type === 'income' ? 'bg-green-500/10 text-green-500' : 'bg-white/5 text-muted-foreground'
+                    }`}>
+                      {tx.type === 'income' ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                    </div>
+                  </div>
                 </div>
+
+                {/* Info Row: Amount, Category, Responsible */}
+                <div className="px-4 py-2 border-y border-white/5 bg-white/2 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+                   <div className="flex flex-col">
+                      <span className="text-[8px] text-muted-foreground uppercase font-black tracking-widest">Montant</span>
+                      <span className={`font-black text-sm whitespace-nowrap ${tx.type === 'income' ? 'text-green-500' : 'text-white'}`}>
+                        {tx.type === 'income' ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(tx.amount)}
+                      </span>
+                   </div>
+                   <div className="flex flex-col items-center">
+                      <span className="text-[8px] text-muted-foreground uppercase font-black tracking-widest">Catégorie</span>
+                      <span className="text-[10px] text-primary font-bold bg-primary/10 px-2 py-0.5 rounded whitespace-nowrap mt-0.5">
+                        {tx.categories?.name || 'Général'}
+                      </span>
+                   </div>
+                   <div className="flex flex-col items-end">
+                      <span className="text-[8px] text-muted-foreground uppercase font-black tracking-widest">Responsable</span>
+                      <span className="text-[10px] text-white/70 font-medium whitespace-nowrap mt-0.5">
+                        {tx.profiles?.full_name?.split(' ')[0] || 'Inconnu'}
+                      </span>
+                   </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="p-2 flex gap-2">
+                  <button 
+                    onClick={() => setTxForDetails(tx)}
+                    className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-white flex items-center justify-center gap-2 active:bg-white/10 transition-colors"
+                  >
+                    Détails
+                  </button>
+                  <div className="relative flex-1">
+                    <button 
+                      onClick={() => setShowActionMenu(showActionMenu === tx.id ? null : tx.id)}
+                      className={`w-full py-2.5 rounded-xl border text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all ${
+                        showActionMenu === tx.id ? 'bg-primary border-primary text-white' : 'bg-white/5 border-white/5 text-white'
+                      }`}
+                    >
+                      Actions <ChevronDown size={14} className={`transition-transform duration-300 ${showActionMenu === tx.id ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {/* Action Dropdown Menu */}
+                    {showActionMenu === tx.id && (
+                      <div className="absolute bottom-full left-0 right-0 mb-2 bg-[#1a1a1a] border border-white/10 rounded-2xl p-1.5 shadow-2xl z-50 animate-in slide-in-from-bottom-2 zoom-in-95 duration-200">
+                        <button 
+                          onClick={() => {
+                            onEdit(tx);
+                            setShowActionMenu(null);
+                          }}
+                          className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl text-xs font-bold transition-colors"
+                        >
+                          <Pencil size={16} className="text-primary" /> 
+                          Modifier
+                        </button>
+                        <button 
+                          onClick={() => {
+                            handleDelete(tx.id);
+                            setShowActionMenu(null);
+                          }}
+                          className="w-full flex items-center gap-3 p-3 hover:bg-red-500/10 rounded-xl text-xs font-bold text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                          Supprimer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Overlay click to close menu */}
+                {showActionMenu === tx.id && (
+                  <div 
+                    className="fixed inset-0 z-40 bg-transparent" 
+                    onClick={() => setShowActionMenu(null)}
+                  />
+                )}
               </div>
             </div>
           ))
@@ -499,6 +610,92 @@ const TransactionsList = ({ onEdit }) => {
           window.dispatchEvent(new CustomEvent('refresh-data'));
         }}
       />
+
+      {/* Details View Modal */}
+      {txForDetails && (
+        <div className="fixed inset-0 z-[250] flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-300">
+           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setTxForDetails(null)} />
+           <div className="relative w-full max-w-sm bg-[#111111] border-t sm:border border-white/10 rounded-t-[2.5rem] sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-full duration-400">
+              <div className="sm:hidden w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 mb-2" />
+              
+              <div className="p-6 pt-2 space-y-6">
+                 <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                          txForDetails.type === 'income' ? 'bg-green-500/10 text-green-500' : 'bg-primary/10 text-primary'
+                       }`}>
+                          {txForDetails.type === 'income' ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                       </div>
+                       <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Type d'opération</p>
+                          <p className="text-sm font-bold uppercase">{txForDetails.type === 'income' ? 'Revenu' : 'Dépense'}</p>
+                       </div>
+                    </div>
+                    <button onClick={() => setTxForDetails(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
+                       <X size={20} />
+                    </button>
+                 </div>
+
+                 <div className="space-y-4">
+                    <div>
+                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-1">Détails de l'opération</p>
+                       <p className="text-xl font-bold leading-tight">{txForDetails.description}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">Montant</p>
+                          <p className={`text-lg font-black ${txForDetails.type === 'income' ? 'text-green-500' : 'text-white'}`}>
+                             {new Intl.NumberFormat('fr-FR').format(txForDetails.amount)} FCFA
+                          </p>
+                       </div>
+                       <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">Date</p>
+                          <p className="text-sm font-bold">
+                             {new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(txForDetails.date))}
+                          </p>
+                       </div>
+                    </div>
+
+                    <div className="space-y-3">
+                       <div className="flex items-center justify-between p-3 bg-white/2 rounded-xl">
+                          <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><Tag size={14} className="text-primary" /> Catégorie</span>
+                          <span className="text-xs font-black uppercase text-white bg-primary/20 px-3 py-1 rounded-lg">{txForDetails.categories?.name || 'Général'}</span>
+                       </div>
+                       <div className="flex items-center justify-between p-3 bg-white/2 rounded-xl">
+                          <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><User size={14} className="text-primary" /> Responsable</span>
+                          <span className="text-xs font-bold">{txForDetails.profiles?.full_name || 'Inconnu'}</span>
+                       </div>
+                       {txForDetails.town && (
+                          <div className="flex items-center justify-between p-3 bg-white/2 rounded-xl">
+                             <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><Globe size={14} className="text-primary" /> Ville / Lieu</span>
+                             <span className="text-xs font-bold">{txForDetails.town}</span>
+                          </div>
+                       )}
+                       {txForDetails.quantity > 1 && (
+                          <div className="flex items-center justify-between p-3 bg-white/2 rounded-xl">
+                             <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><Tag size={14} className="text-primary" /> Quantité</span>
+                             <span className="text-xs font-bold">x {txForDetails.quantity}</span>
+                          </div>
+                       )}
+                    </div>
+                 </div>
+
+                 <div className="pt-2">
+                    <button 
+                       onClick={() => {
+                          onEdit(txForDetails);
+                          setTxForDetails(null);
+                       }}
+                       className="w-full bg-primary text-white h-12 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-95 transition-all shadow-xl shadow-primary/20"
+                    >
+                       <Pencil size={16} /> Modifier l'opération
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 };
