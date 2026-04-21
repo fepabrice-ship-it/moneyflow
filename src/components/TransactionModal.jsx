@@ -276,23 +276,7 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
               </div>
 
 
-              {/* Exclusion Toggle */}
-              <div className="bg-white/5 p-3 rounded-2xl border border-white/5 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, exclude_from_global: !formData.exclude_from_global })}
-                  className="w-full flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${formData.exclude_from_global ? 'bg-primary border-primary' : 'bg-transparent border-white/20'}`}>
-                      {formData.exclude_from_global && <Check size={10} className="text-white" />}
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-tight text-white">Exclure du solde global</span>
-                  </div>
-                  <AlertCircle size={14} className="text-muted-foreground opacity-50" />
-                </button>
-                <p className="text-[8px] text-muted-foreground leading-tight px-6 italic">Activez ceci pour les injections de capital ou reports de solde afin de ne pas fausser le bilan à vie du projet.</p>
-              </div>
+              {/* Removed Exclusion Toggle - Now handled automatically by category selection */}
 
               {/* Responsible Person Selector (Compact) */}
               <div className="border-t border-white/5 pt-3">

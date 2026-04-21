@@ -173,7 +173,8 @@ const TransactionsList = ({ onEdit }) => {
   let totalExpense = 0;
   
   filteredTransactions.forEach(tx => {
-    if (tx.exclude_from_global) return; // Skip technical/carry-over transactions in totals
+    const isExcluded = tx.exclude_from_global || tx.categories?.name === 'Capital';
+    if (isExcluded) return; // Skip technical/capital/carry-over transactions in performance totals
     if (tx.type === 'income') totalIncome += Number(tx.amount);
     else totalExpense += Number(tx.amount);
   });

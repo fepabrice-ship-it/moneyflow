@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, CartesianGrid
+  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, CartesianGrid,
+  LabelList
 } from 'recharts';
 import { 
   TrendingUp, 
@@ -108,150 +109,132 @@ const Statistics = () => {
 
   // --- ANALYTICS CALCULATIONS ---
   const stats = useMemo(() => {
-    const cityData = {}; // city -> { revenue, cost, publicity, piecesSold, inventory: { prodId -> qty } }
-    const productStats = {}; // prodId -> { name, totalSold, revenue, stock }
-    const timeSeries = {}; // date string -> { revenue }
+    const cityData = {};
+    const dailySeries = {}; // YYYY-MM-DD -> { name, revenue }
     
     let totalRevenue = 0;
-    let totalPublicity = 0;
     let totalExpenses = 0;
     let totalPiecesSold = 0;
     let totalSalesCount = 0;
+    let totalPublicity = 0;
 
-    // Breakdown for the Details Modal (Filtered by city if selected)
-    const incomeBreakdown = {}; // catName -> total
-    const expenseBreakdown = {}; // catName -> total
+    const incomeBreakdown = {};
+    const expenseBreakdown = {};
 
     transactions.forEach(tx => {
-      if (tx.exclude_from_global) return;
-
-      const date = tx.date;
-      const city = tx.town || 'Inconnu';
+      const catName = tx.categories?.name;
       const amount = Number(tx.amount);
       const qty = Number(tx.quantity || 1);
-      const catName = tx.categories?.name;
+      const date = tx.date;
+      const city = tx.town || 'Inconnu';
       const prodId = tx.product_id;
+
+      // EXCLUSION LOGIC: Capital is Cash Flow, not Performance
+      const isPerformanceExclusion = tx.exclude_from_global || catName === 'Capital';
 
       if (!cityData[city]) {
         cityData[city] = { 
-          income: 0, expense: 0, revenue: 0, cost: 0, publicity: 0, piecesSold: 0, 
-          inventory: {},
-          incomeBreakdown: {},
-          expenseBreakdown: {}
+          income: 0, expense: 0, revenue: 0, piecesSold: 0, inventory: {},
+          incomeBreakdown: {}, expenseBreakdown: {}
         };
       }
 
-      // Track Income/Expense for "Cash Flow" Profit - Use tx.type directly
+      // 1. CASH FLOW TRACKING (For "Safe to Spend" type metrics)
       if (tx.type === 'income') {
         cityData[city].income += amount;
-        totalRevenue += amount;
         
-        // Per-city Breakdown
-        cityData[city].incomeBreakdown[catName] = (cityData[city].incomeBreakdown[catName] || 0) + amount;
-        
-        // Global Breakdown logic (for the 'all' view)
-        incomeBreakdown[catName] = (incomeBreakdown[catName] || 0) + amount;
+        // PERFORMANCE TRACKING: Only "Vente" and non-capital income counts as revenue
+        if (!isPerformanceExclusion) {
+          totalRevenue += amount;
+          cityData[city].incomeBreakdown[catName] = (cityData[city].incomeBreakdown[catName] || 0) + amount;
+          incomeBreakdown[catName] = (incomeBreakdown[catName] || 0) + amount;
+
+          if (catName === 'Vente') {
+            totalPiecesSold += qty;
+            totalSalesCount++;
+            cityData[city].revenue += amount;
+            cityData[city].piecesSold += qty;
+            
+            // Daily Sales
+            if (!dailySeries[date]) dailySeries[date] = { name: date, revenue: 0 };
+            dailySeries[date].revenue += amount;
+          }
+        }
       } else {
         cityData[city].expense += amount;
-        totalExpenses += amount;
         
-        // Per-city Breakdown
-        cityData[city].expenseBreakdown[catName] = (cityData[city].expenseBreakdown[catName] || 0) + amount;
-        
-        // Global Breakdown logic (for the 'all' view)
-        expenseBreakdown[catName] = (expenseBreakdown[catName] || 0) + amount;
-      }
+        // PERFORMANCE TRACKING: All expenses count against profit (except maybe some exclusions)
+        if (!tx.exclude_from_global) {
+          totalExpenses += amount;
+          cityData[city].expenseBreakdown[catName] = (cityData[city].expenseBreakdown[catName] || 0) + amount;
+          expenseBreakdown[catName] = (expenseBreakdown[catName] || 0) + amount;
 
-      // Initialize detailed inventory for the product in this city
-      if (prodId && !cityData[city].inventory[prodId]) {
-        cityData[city].inventory[prodId] = { stockIn: 0, stockOut: 0, balance: 0, stockInAmount: 0 };
-      }
-
-      // 1. Specific Logic for "Vente" (Revenue/Sales/Inventory)
-      if (catName === 'Vente') {
-        totalPiecesSold += qty;
-        totalSalesCount++;
-        cityData[city].revenue += amount;
-        cityData[city].piecesSold += qty;
-        
-        const monthGroup = date.substring(0, 7); // YYYY-MM
-        if (!timeSeries[monthGroup]) timeSeries[monthGroup] = { name: monthGroup, revenue: 0 };
-        timeSeries[monthGroup].revenue += amount;
-
-        if (prodId) {
-          cityData[city].inventory[prodId].stockOut += qty;
-          cityData[city].inventory[prodId].balance -= qty;
+          if (catName === 'Publicité') totalPublicity += amount;
         }
       }
 
-      // 2. Inventory Supply (Investissement) - Strictly for stock value
-      if (catName === 'Investissement' && prodId) {
-        cityData[city].inventory[prodId].stockIn += qty;
-        cityData[city].inventory[prodId].balance += qty;
-        cityData[city].inventory[prodId].stockInAmount += amount;
-      }
-
-      // 3. Publicity Cost
-      if (catName === 'Publicité') {
-        totalPublicity += amount;
-        cityData[city].publicity += amount;
+      // 2. INVENTORY TRACKING
+      if (prodId) {
+        if (!cityData[city].inventory[prodId]) {
+          cityData[city].inventory[prodId] = { stockIn: 0, stockOut: 0, balance: 0, stockInAmount: 0 };
+        }
+        if (catName === 'Vente') {
+          cityData[city].inventory[prodId].stockOut += qty;
+          cityData[city].inventory[prodId].balance -= qty;
+        }
+        if (catName === 'Investissement') {
+          cityData[city].inventory[prodId].stockIn += qty;
+          cityData[city].inventory[prodId].balance += qty;
+          cityData[city].inventory[prodId].stockInAmount += amount;
+        }
       }
     });
 
     const netProfit = totalRevenue - totalExpenses;
     const averageOrderValue = totalSalesCount > 0 ? totalRevenue / totalSalesCount : 0;
     
-    // Calculate Inventory Value based on Actual Investment Costs
+    // Sort daily series by date
+    const timeSeries = Object.values(dailySeries).sort((a, b) => a.name.localeCompare(b.name));
+
+    // Calculate Inventory Value
     let totalInventoryValue = 0;
     Object.values(cityData).forEach(city => {
       Object.entries(city.inventory).forEach(([pId, data]) => {
         if (data.balance > 0 && data.stockIn > 0) {
-          // Calculate unit cost from actual investments
-          const averageUnitCost = data.stockInAmount / data.stockIn;
-          totalInventoryValue += data.balance * averageUnitCost;
+          const avgCost = data.stockInAmount / data.stockIn;
+          totalInventoryValue += data.balance * avgCost;
         }
       });
     });
 
-    // Format Charts Data
-    const charts = {
-      inventory: Object.entries(cityData).flatMap(([cityName, d]) => 
-        Object.entries(d.inventory).map(([pId, data]) => ({
-          city: cityName,
-          product: products.find(p => p.id === pId)?.name || 'Produit inconnu',
-          stockIn: data.stockIn,
-          stockOut: data.stockOut,
-          balance: data.balance,
-          incomeBreakdown: d.incomeBreakdown,
-          expenseBreakdown: d.expenseBreakdown
-        }))
-      ),
-      cities: ['all', ...Object.keys(cityData).sort()]
-    };
+    // Top Expenses Calculations (Operational only)
+    const sortedExpenses = Object.entries(expenseBreakdown)
+      .filter(([name]) => name !== 'Investissement')
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
 
-    // Calculate details for each chart item as well
     const cityPerformances = Object.entries(cityData).map(([name, d]) => ({ 
       name, 
-      revenue: d.income, 
-      profit: d.income - d.expense,
+      revenue: d.revenue, 
+      profit: d.revenue - d.expense, // Simplification: Business profit in that city
       incomeBreakdown: d.incomeBreakdown,
       expenseBreakdown: d.expenseBreakdown
     })).sort((a, b) => b.revenue - a.revenue);
 
     return { 
-      totalRevenue, 
-      totalPiecesSold, 
-      netProfit, 
-      totalPublicity,
-      averageOrderValue,
-      totalInventoryValue,
-      charts: { ...charts, salesByCity: cityPerformances },
-      cityData,
-      globalBreakdown: {
-        incomeBreakdown,
-        expenseBreakdown,
-        totalIncome: totalRevenue,
-        totalExpense: totalExpenses
+      totalRevenue, totalPiecesSold, netProfit, totalPublicity, averageOrderValue, totalInventoryValue,
+      charts: { 
+        timeSeries, 
+        salesByCity: cityPerformances,
+        topExpenses: sortedExpenses,
+        inventory: Object.entries(cityData).flatMap(([cityName, d]) => 
+          Object.entries(d.inventory).map(([pId, data]) => ({
+            city: cityName,
+            product: products.find(p => p.id === pId)?.name || 'Inconnu',
+            stockIn: data.stockIn, stockOut: data.stockOut, balance: data.balance
+          }))
+        ),
+        cities: ['all', ...Object.keys(cityData).sort()]
       }
     };
   }, [transactions, products]);
@@ -377,41 +360,65 @@ const Statistics = () => {
             </div>
           </div>
 
-          {/* Sales Chart */}
-          <div className="glass-card p-6">
-            <h2 className="font-bold flex items-center gap-2 mb-6">
-              <TrendingUp className="text-primary" size={20} />
-              Chiffre d'Affaires Mensuel
-            </h2>
-            <div className="h-[300px] w-full">
+          {/* Daily Sales Chart - Large & Premium */}
+          <div className="col-span-12 glass-card p-6 md:p-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <TrendingUp className="text-primary" size={24} />
+                  Évolution des Ventes
+                </h2>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] mt-1">Chiffre d'affaires journalier (Ventes réelles)</p>
+              </div>
+              <div className="px-4 py-2 bg-primary/10 rounded-2xl border border-primary/20">
+                <span className="text-[10px] font-bold text-primary uppercase tracking-widest block leading-none mb-1">Moyenne Quotidienne</span>
+                <span className="text-lg font-black text-white">{new Intl.NumberFormat('fr-FR').format(stats.totalRevenue / Math.max(stats.charts.timeSeries.length, 1))} F</span>
+              </div>
+            </div>
+            
+            <div className="h-[350px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={stats.charts.timeSeries}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
                       <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
                   <XAxis 
                     dataKey="name" 
-                    stroke="#a3a3a3" 
+                    stroke="#ffffff" 
                     fontSize={10} 
                     tickLine={false} 
                     axisLine={false}
+                    tickFormatter={(str) => {
+                      const d = new Date(str);
+                      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+                    }}
                   />
                   <YAxis 
-                    stroke="#a3a3a3" 
+                    stroke="#ffffff" 
                     fontSize={10} 
                     tickLine={false} 
                     axisLine={false} 
-                    tickFormatter={(val) => `${val/1000}k`}
+                    tickFormatter={(val) => `${val >= 1000 ? (val/1000).toFixed(0) + 'k' : val}`}
                   />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#171717', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '10px' }}
-                    itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+                    contentStyle={{ backgroundColor: '#000000', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '16px', fontSize: '11px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
+                    itemStyle={{ color: '#3b82f6', fontWeight: '900' }}
+                    labelStyle={{ color: '#737373', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                    labelFormatter={(label) => new Date(label).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
                   />
-                  <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                  <Area 
+                    type="monotone" 
+                    dataKey="revenue" 
+                    stroke="#3b82f6" 
+                    strokeWidth={4} 
+                    fillOpacity={1} 
+                    fill="url(#colorRevenue)" 
+                    animationDuration={2000}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -487,84 +494,92 @@ const Statistics = () => {
             </div>
           </div>
 
-          {/* Sales & Profit by City */}
+          {/* TOP CATEGORIES DÉPENSES */}
           <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 mb-6">
+              <Tag className="text-red-500" size={20} />
+              <h2 className="font-bold">Postes de Dépenses</h2>
+            </div>
+            
+            <div className="space-y-6">
+              {stats.charts.topExpenses.length > 0 ? (
+                stats.charts.topExpenses.slice(0, 5).map((exp, i) => {
+                  const percentage = (exp.value / stats.charts.topExpenses.reduce((acc, curr) => acc + curr.value, 0)) * 100;
+                  return (
+                    <div key={i} className="space-y-2">
+                      <div className="flex justify-between items-end">
+                        <span className="text-xs font-black text-white">{exp.name}</span>
+                        <span className="text-[10px] font-bold text-muted-foreground">{new Intl.NumberFormat('fr-FR').format(exp.value)} F</span>
+                      </div>
+                      <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                        <div 
+                          className="h-full bg-red-500/50 rounded-full transition-all duration-1000"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-center py-10 text-[10px] text-muted-foreground italic">Aucune dépense opérationnelle enregistrée.</p>
+              )}
+            </div>
+          </div>
+
+          {/* CA Par Ville - Bar Chart Horizontal */}
+          <div className="glass-card p-6">
+            <div className="flex items-center justify-between mb-6">
               <h2 className="font-bold flex items-center gap-2">
-                <PieChartIcon className="text-primary" size={20} />
-                {cityMetric === 'revenue' ? 'CA par Ville' : 'Bénéfice par Ville'}
+                <MapPin className="text-primary" size={20} />
+                Ventes par Ville
               </h2>
-              <div className="flex bg-white/5 p-1 rounded-lg border border-white/5">
-                <button 
-                  onClick={() => setCityMetric('revenue')}
-                  className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${cityMetric === 'revenue' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'}`}
-                >
-                  CA
-                </button>
-                <button 
-                  onClick={() => setCityMetric('profit')}
-                  className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${cityMetric === 'profit' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'}`}
-                >
-                  Bénéfice
-                </button>
-              </div>
             </div>
 
-            <p className="text-[9px] text-muted-foreground italic mb-6 flex items-center gap-1">
-              <Info size={10} className="text-primary" />
-              {cityMetric === 'revenue' 
-                ? "Total des ventes encaissées avant déduction des charges." 
-                : "Revenu réel après avoir soustrait les investissements et la publicité."
-              }
-            </p>
-            
-            <div className="h-[200px] w-full">
+            <div className="h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stats.charts.salesByCity}
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey={cityMetric}
-                  >
+                <BarChart data={stats.charts.salesByCity} layout="vertical" margin={{ left: 10, right: 30 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" horizontal={false} />
+                  <XAxis type="number" hide />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    stroke="#ffffff" 
+                    fontSize={10} 
+                    tickLine={false} 
+                    axisLine={false}
+                    width={80}
+                  />
+                  <Tooltip 
+                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
+                    contentStyle={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', fontSize: '10px' }}
+                    itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+                    formatter={(val) => [`${new Intl.NumberFormat('fr-FR').format(val)} F`, 'Revenu']}
+                  />
+                  <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
+                    <LabelList 
+                      dataKey="revenue" 
+                      position="right" 
+                      formatter={(val) => `${new Intl.NumberFormat('fr-FR').format(val)} F`}
+                      fill="#ffffff"
+                      fontSize={10}
+                      fontWeight="bold"
+                    />
                     {stats.charts.salesByCity.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#171717', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '10px' }}
-                    formatter={(val) => [`${new Intl.NumberFormat('fr-FR').format(val)} F`, cityMetric === 'revenue' ? 'CA' : 'Bénéfice']}
-                  />
-                </PieChart>
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="space-y-4 mt-6">
-              {stats.charts.salesByCity.slice(0, 5).map((city, i) => (
-                <div key={i} className="flex items-center justify-between border-b border-white/[0.02] pb-2 last:border-0 group">
-                  <div className="flex items-center gap-2 text-xs">
-                    <div className="w-1.5 h-1.5 rounded-full transition-transform group-hover:scale-150" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                    <span className="font-bold">{city.name}</span>
+
+            <div className="space-y-3 mt-4">
+              {stats.charts.salesByCity.slice(0, 3).map((city, i) => (
+                <div key={i} className="flex items-center justify-between p-2 bg-white/5 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                    <span className="font-bold text-white uppercase">{city.name}</span>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={() => setSelectedDetailsData({ name: city.name, incomeBreakdown: city.incomeBreakdown, expenseBreakdown: city.expenseBreakdown, totalIncome: city.revenue, totalExpense: city.revenue - city.profit })}
-                      className="px-2 py-1 bg-white/10 hover:bg-primary/20 hover:text-primary rounded text-[7px] font-black uppercase tracking-widest transition-all"
-                    >
-                      Détails
-                    </button>
-                    <div className="text-right">
-                      <p className={`text-[10px] font-black ${cityMetric === 'revenue' ? 'text-white' : (city.profit >= 0 ? 'text-green-500' : 'text-red-500')}`}>
-                        {cityMetric === 'revenue' 
-                          ? `${new Intl.NumberFormat('fr-FR').format(city.revenue)} F`
-                          : `${city.profit > 0 ? '+' : ''}${new Intl.NumberFormat('fr-FR').format(city.profit)} F`
-                        }
-                      </p>
-                      <p className="text-[7px] font-bold uppercase text-muted-foreground tracking-widest mt-0.5">
-                        {cityMetric === 'revenue' ? 'Encaissements' : 'Bénéfice Réel'}
-                      </p>
-                    </div>
-                  </div>
+                  <span className="text-[10px] font-black text-primary">{new Intl.NumberFormat('fr-FR').format(city.revenue)} F</span>
                 </div>
               ))}
             </div>

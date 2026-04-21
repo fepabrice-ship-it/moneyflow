@@ -128,7 +128,7 @@ const Dashboard = (props) => {
           if (isCurrentMonth) cashMonthlyInc += amount;
           else if (isPast) cashPastInc += amount;
           
-          if (catName === 'Investissement' || isExclude) {
+          if (catName === 'Investissement' || catName === 'Capital' || isExclude) {
             capitalInGlobal += amount;
           }
         } else {
@@ -141,7 +141,7 @@ const Dashboard = (props) => {
 
       // PERFORMANCE CALCULATION (ROI/Business accuracy - Matches TransactionsList logic EXACTLY)
         // We only exclude transactions the user manually flagged as 'Internal/Technical'
-        if (!isExclude) {
+        if (!isExclude && catName !== 'Capital') {
           if (isIncome) {
             perfGlobalInc += amount;
             if (isCurrentMonth) perfMonthlyInc += amount;
