@@ -22,7 +22,7 @@ import Onboarding from './components/Onboarding';
 import { ProjectProvider, useProject } from './contexts/ProjectContext';
 
 const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editingTransaction, setEditingTransaction, activeTab, setActiveTab }) => {
-  const { currentProject, projects, selectProject, loading: projectLoading } = useProject();
+  const { currentProject, projects, loading: projectLoading } = useProject();
 
   if (projectLoading) {
     return (
@@ -69,26 +69,7 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Brayce Edition</p>
           </div>
 
-          {/* Project Selector */}
-          <div className="mb-8">
-            <label className="text-[10px] text-muted-foreground uppercase tracking-widest block mb-2 px-1">Projet Actif</label>
-            <div className="space-y-1">
-              {projects.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => selectProject(p)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
-                    currentProject?.id === p.id 
-                    ? 'bg-white/10 text-white font-medium shadow-sm' 
-                    : 'text-muted-foreground hover:bg-white/5 hover:text-white'
-                  }`}
-                >
-                  <div className={`w-2 h-2 rounded-full ${currentProject?.id === p.id ? 'bg-primary animate-pulse' : 'bg-white/20'}`} />
-                  {p.name}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Project Selector moved to Settings */}
 
           <nav className="flex-1 space-y-2">
             {[
@@ -148,22 +129,7 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
 
       {/* Mobile Bottom Navigation & Project Selector */}
       <nav className="fixed bottom-6 left-6 right-6 lg:hidden z-40 space-y-4">
-        {/* Mobile Project Selector (Compact) */}
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-2">
-          {projects.map(p => (
-            <button
-              key={p.id}
-              onClick={() => selectProject(p)}
-              className={`whitespace-nowrap px-4 py-2 rounded-full text-xs transition-all border ${
-                currentProject?.id === p.id 
-                ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' 
-                : 'bg-muted/80 backdrop-blur-xl border-white/5 text-muted-foreground'
-              }`}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
+        {/* Mobile Project Selector moved to Settings */}
 
         <div className="h-16 bg-muted/80 backdrop-blur-xl border border-white/5 rounded-2xl p-2 flex items-center justify-around shadow-2xl">
           {[

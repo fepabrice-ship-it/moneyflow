@@ -17,8 +17,13 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
     exclude_from_global: false,
     quantity: 1,
     town: '',
-    product_id: ''
+    product_id: '',
+    payment_status: 'paid',
+    customer_id: ''
   });
+
+  const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -33,7 +38,9 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
           exclude_from_global: editingTransaction.exclude_from_global || false,
           quantity: editingTransaction.quantity || 1,
           town: editingTransaction.town || '',
-          product_id: editingTransaction.product_id || ''
+          product_id: editingTransaction.product_id || '',
+          payment_status: editingTransaction.payment_status || 'paid',
+          customer_id: editingTransaction.customer_id || ''
         });
       } else {
         // Default for new transaction
@@ -49,17 +56,18 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
               exclude_from_global: false,
               quantity: 1,
               town: '',
-              product_id: ''
+              product_id: '',
+              payment_status: 'paid',
+              customer_id: ''
             }));
           }
         });
       }
       fetchCategories();
       fetchProducts();
+      fetchCustomers();
     }
   }, [isOpen, editingTransaction]);
-
-  const [products, setProducts] = useState([]);
 
   const fetchProducts = async () => {
     if (!currentProject) return;
@@ -67,12 +75,24 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
     if (data) setProducts(data);
   };
 
+  const fetchCustomers = async () => {
+    if (!currentProject) return;
+    const { data } = await supabase.from('customers').select('*').eq('project_id', currentProject.id).order('name');
+    if (data) setCustomers(data);
+  };
+
+  const BUSINESS_CATEGORIES = ['Vente', 'Achats produits', 'Frais de livraison', 'Loyer', 'Electricité', 'Achats divers'];
+
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('*').order('name');
     if (data) {
-      setCategories(data);
-      if (!editingTransaction && data.length > 0) {
-        setFormData(prev => ({ ...prev, category_id: data[0].id }));
+      let filtered = data;
+      if (currentProject?.type === 'continuous') {
+        filtered = data.filter(cat => BUSINESS_CATEGORIES.includes(cat.name));
+      }
+      setCategories(filtered);
+      if (!editingTransaction && filtered.length > 0) {
+        setFormData(prev => ({ ...prev, category_id: filtered[0].id }));
       }
     }
   };
@@ -88,24 +108,61 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
         amount: parseFloat(formData.amount),
         quantity: parseFloat(formData.quantity) || 1,
         product_id: formData.product_id === '' ? null : formData.product_id,
+        customer_id: formData.customer_id === '' ? null : formData.customer_id,
         project_id: currentProject.id
       };
 
       let error;
+      let transactionId;
+
       if (editingTransaction) {
-        const { error: updateError } = await supabase
+        const { data, error: updateError } = await supabase
           .from('transactions')
           .update(payload)
-          .eq('id', editingTransaction.id);
+          .eq('id', editingTransaction.id)
+          .select()
+          .single();
         error = updateError;
+        transactionId = data?.id;
       } else {
-        const { error: insertError } = await supabase
+        const { data, error: insertError } = await supabase
           .from('transactions')
-          .insert([payload]);
+          .insert([payload])
+          .select()
+          .single();
         error = insertError;
+        transactionId = data?.id;
       }
 
       if (error) throw error;
+
+      // --- STOCK LOGIC ---
+      const selectedCategory = categories.find(c => c.id === formData.category_id);
+      if (formData.product_id && !editingTransaction) {
+        const product = products.find(p => p.id === formData.product_id);
+        if (product) {
+          const qty = parseFloat(formData.quantity) || 1;
+          const isVente = selectedCategory?.name === 'Vente';
+          const isAchat = selectedCategory?.name === 'Achats produits';
+          
+          if (isVente || isAchat) {
+            const stockDiff = isVente ? -qty : qty;
+            const newStock = (product.stock_quantity || 0) + stockDiff;
+            
+            // 1. Update product stock
+            await supabase.from('products').update({ stock_quantity: newStock }).eq('id', product.id);
+            
+            // 2. Create stock movement
+            await supabase.from('stock_movements').insert([{
+              product_id: product.id,
+              transaction_id: transactionId,
+              type: isVente ? 'out' : 'in',
+              quantity: qty,
+              reason: isVente ? 'sale' : 'purchase'
+            }]);
+          }
+        }
+      }
       
       onRefresh();
       onClose();
@@ -239,6 +296,45 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
                   </div>
                 </div>
               </div>
+
+              {/* Debt / Payment Status (Business Only) */}
+              {currentProject?.type === 'continuous' && formData.type === 'income' && (
+                <div className="space-y-3 p-3 bg-white/5 rounded-2xl border border-white/5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={14} className={formData.payment_status === 'unpaid' ? 'text-orange-500' : 'text-muted-foreground'} />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Vendre à crédit ?</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, payment_status: formData.payment_status === 'paid' ? 'unpaid' : 'paid' })}
+                      className={`w-10 h-5 rounded-full relative transition-colors ${formData.payment_status === 'unpaid' ? 'bg-orange-500' : 'bg-white/10'}`}
+                    >
+                      <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${formData.payment_status === 'unpaid' ? 'left-6' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  {formData.payment_status === 'unpaid' && (
+                    <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200">
+                      <label className="text-[9px] font-bold uppercase tracking-widest text-orange-500 ml-1">Client débiteur</label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+                        <select
+                          required={formData.payment_status === 'unpaid'}
+                          value={formData.customer_id}
+                          onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
+                          className="w-full bg-background border border-orange-500/30 rounded-xl py-2 pl-9 pr-4 text-xs focus:border-orange-500 outline-none appearance-none transition-all"
+                        >
+                          <option value="">-- Sélectionner un client --</option>
+                          {customers.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Quantity & Town */}
               <div className={`grid grid-cols-2 gap-3 p-3 rounded-2xl border transition-all duration-300 ${categories.find(c => c.id === formData.category_id)?.name === 'Vente' ? 'bg-primary/5 border-primary/20 scale-[1.02]' : 'bg-transparent border-transparent'}`}>

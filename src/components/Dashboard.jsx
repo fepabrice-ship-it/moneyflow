@@ -8,10 +8,18 @@ import {
   Info,
   Layers,
   User,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle,
+  Users,
+  Calculator,
+  CreditCard,
+  X
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useProject } from '../contexts/ProjectContext';
+import CustomerManagement from './CustomerManagement';
+import Leaderboard from './Leaderboard';
+import DailyClosingModal from './DailyClosingModal';
 
 const Dashboard = (props) => {
   const { currentProject, members } = useProject();
@@ -25,7 +33,11 @@ const Dashboard = (props) => {
   const [obligations, setObligations] = useState(0);
   const [savingsGoal, setSavingsGoal] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState([]);
+  const [lowStockProducts, setLowStockProducts] = useState([]);
+  const [totalDebt, setTotalDebt] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showCustomers, setShowCustomers] = useState(false);
+  const [showClosing, setShowClosing] = useState(false);
 
   // Default to Global view for continuous flow projects
   useEffect(() => {
@@ -173,6 +185,22 @@ const Dashboard = (props) => {
       
       setRecentTransactions(txRes.data || []);
       
+      // --- BUSINESS SPECIFIC DATA ---
+      if (currentProject.type === 'continuous') {
+        const [stockRes, debtRes] = await Promise.all([
+          supabase.from('products')
+            .select('name, stock_quantity, alert_threshold')
+            .eq('project_id', currentProject.id),
+          supabase.from('transactions')
+            .select('amount')
+            .eq('project_id', currentProject.id)
+            .eq('payment_status', 'unpaid')
+        ]);
+
+        setLowStockProducts((stockRes.data || []).filter(p => p.stock_quantity <= p.alert_threshold));
+        setTotalDebt(debtRes.data?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0);
+      }
+      
     } catch (err) {
       console.error(err);
     } finally {
@@ -240,6 +268,17 @@ const Dashboard = (props) => {
                 Global
               </button>
             </div>
+
+            {/* Daily Closing Button (Business only) */}
+            {isContinuous && (
+              <button 
+                onClick={() => setShowClosing(true)}
+                className="bg-white text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-white/5 active:scale-95 transition-all cursor-pointer"
+              >
+                <Calculator size={14} />
+                Clôture
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -309,7 +348,80 @@ const Dashboard = (props) => {
             </div>
           </div>
         )}
+
+        {isContinuous && (
+          <div className="col-span-12 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Low Stock Alert */}
+            {lowStockProducts.length > 0 && (
+              <div className="bg-orange-500/10 border border-orange-500/20 rounded-[2rem] p-6">
+                <div className="flex items-center gap-2 mb-4 text-orange-500">
+                  <AlertTriangle size={20} />
+                  <h3 className="font-bold uppercase tracking-widest text-xs">Alertes Stock Bas</h3>
+                </div>
+                <div className="space-y-2">
+                  {lowStockProducts.map((p, i) => (
+                    <div key={i} className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                      <span className="text-sm font-bold">{p.name}</span>
+                      <span className="text-xs font-black text-orange-500">{p.stock_quantity} restants</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Debt Overview */}
+            {totalDebt > 0 && (
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-[2rem] p-6 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-4 text-blue-400">
+                    <CreditCard size={20} />
+                    <h3 className="font-bold uppercase tracking-widest text-xs">L'Ardoise (Dettes)</h3>
+                  </div>
+                  <p className="text-4xl font-black text-blue-400 tracking-tighter">
+                    {new Intl.NumberFormat('fr-FR').format(totalDebt)} FCFA
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-2 uppercase tracking-widest">Montant total à recouvrir auprès des clients.</p>
+                </div>
+                <button 
+                  onClick={() => setShowCustomers(true)}
+                  className="mt-6 w-full py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
+                >
+                  Gérer les clients
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
+
+      {showCustomers && (
+        <div className="fixed inset-0 z-[250] bg-muted overflow-y-auto p-6 animate-in slide-in-from-right duration-300">
+          <div className="max-w-4xl mx-auto">
+            <button 
+              onClick={() => { setShowCustomers(false); fetchData(); }}
+              className="mb-8 flex items-center gap-2 text-muted-foreground hover:text-white transition-colors"
+            >
+              <X size={20} /> Retour au Dashboard
+            </button>
+            <CustomerManagement />
+          </div>
+        </div>
+      )}
+
+      {showClosing && (
+        <DailyClosingModal 
+          isOpen={showClosing} 
+          onClose={() => setShowClosing(false)} 
+          onRefresh={fetchData} 
+        />
+      )}
+
+      {/* Leaderboard (Owner Only) */}
+      {isContinuous && currentProject?.role === 'owner' && (
+        <section className="space-y-4">
+          <Leaderboard />
+        </section>
+      )}
 
       <section className="space-y-4">
         <div className="flex justify-between items-center">

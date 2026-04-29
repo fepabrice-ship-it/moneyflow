@@ -21,24 +21,24 @@ const Onboarding = () => {
       id: 'standard',
       name: 'Standard',
       icon: Target,
-      desc: 'Gestion mensuelle simple. Idéal pour votre budget personnel.',
-      details: 'Chaque mois repart à zéro. Pas de report de solde automatique.',
+      desc: 'Gère ton argent du mois (salaire, argent de poche, etc.) chaque mois simplement.',
+      details: 'Chaque nouveau mois recommence à zéro, et tu dois définir ton budget du mois.',
       color: 'blue'
     },
     {
       id: 'continuous',
-      name: 'Flux Continu',
+      name: 'Business',
       icon: RefreshCcw,
-      desc: 'Gestion Business / Projet. L\'argent "travaille" dans le temps.',
-      details: 'Le solde restant de mars devient automatiquement le capital d\'avril.',
+      desc: 'Suis l’argent de ton activité au quotidien.',
+      details: 'L’argent restant continue le mois suivant.',
       color: 'green'
     },
     {
       id: 'investment',
       name: 'Investissement',
       icon: TrendingUp,
-      desc: 'Suivi de capital long terme. Fokus sur la croissance.',
-      details: 'Optimisé pour suivre vos injections de fonds et vos gains globaux.',
+      desc: 'Suis ton argent que tu fais grandir',
+      details: 'Ajoute de l’argent et vois combien tu gagnes au total.',
       color: 'purple'
     }
   ];
@@ -149,26 +149,29 @@ const Onboarding = () => {
                 ))}
               </div>
 
-              <div className="pt-4 flex gap-4">
-                <button
-                  onClick={() => setStep(1)}
-                  className="px-6 h-16 rounded-2xl font-bold bg-white/5 text-muted-foreground hover:bg-white/10 transition-all"
-                >
-                  Retour
-                </button>
-                <button
-                  onClick={handleLaunch}
-                  disabled={loading}
-                  className="flex-1 bg-primary text-white h-16 rounded-2xl font-black text-lg flex items-center justify-center gap-3 hover:opacity-90 active:scale-95 transition-all shadow-xl shadow-primary/20 cursor-pointer"
-                >
-                  {loading ? <Loader2 className="animate-spin" size={24} /> : (
-                    <>
-                      Lancer le projet
-                      <Rocket size={20} />
-                    </>
-                  )}
-                </button>
-              </div>
+              <div className="pt-4 flex gap-3">
+  <button
+    onClick={() => setStep(1)}
+    className="px-4 h-11 rounded-xl font-medium text-sm bg-white/5 text-muted-foreground hover:bg-white/10 transition-all"
+  >
+    Retour
+  </button>
+
+  <button
+    onClick={handleLaunch}
+    disabled={loading}
+    className="flex-1 bg-primary text-white h-11 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-md shadow-primary/20 disabled:opacity-50"
+  >
+    {loading ? (
+      <Loader2 className="animate-spin" size={18} />
+    ) : (
+      <>
+        Lancer
+        <Rocket size={16} />
+      </>
+    )}
+  </button>
+</div>
             </div>
           )}
         </div>

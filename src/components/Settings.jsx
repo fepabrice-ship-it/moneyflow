@@ -8,7 +8,16 @@ import {
   Loader2, 
   LogOut,
   ChevronRight,
-  Info
+  Info,
+  Package,
+  Plus,
+  Trash2,
+  AlertCircle,
+  Briefcase,
+  Layout,
+  Rocket,
+  RefreshCcw,
+  TrendingUp
 } from 'lucide-react';
 import { useProject } from '../contexts/ProjectContext';
 
@@ -34,23 +43,30 @@ const PROJECT_TYPES = [
 ];
 
 const Settings = () => {
-  const { currentProject, createProject, updateProject, refreshProjects } = useProject();
+  const { currentProject, projects, selectProject, createProject, updateProject, refreshProjects } = useProject();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   
+  // Create Project Flow State
+  const [showCreateFlow, setShowCreateFlow] = useState(false);
+  const [createStep, setCreateStep] = useState(1);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectType, setNewProjectType] = useState('standard');
+  const [isCreating, setIsCreating] = useState(false);
   
   const [renameProjectName, setRenameProjectName] = useState(currentProject?.name || '');
   const [renameProjectType, setRenameProjectType] = useState(currentProject?.type || 'standard');
   const [isUpdating, setIsUpdating] = useState(false);
   
   const [profile, setProfile] = useState({
-    monthly_savings_goal: 0,
     full_name: ''
   });
+
+  const [products, setProducts] = useState([]);
+  const [newProduct, setNewProduct] = useState({ name: '', purchase_price: '', stock_quantity: '', alert_threshold: 5 });
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -60,8 +76,53 @@ const Settings = () => {
     if (currentProject) {
       setRenameProjectName(currentProject.name);
       setRenameProjectType(currentProject.type || 'standard');
+      fetchProducts();
     }
   }, [currentProject]);
+
+  const fetchProducts = async () => {
+    if (!currentProject) return;
+    const { data } = await supabase
+      .from('products')
+      .select('*')
+      .eq('project_id', currentProject.id)
+      .order('name');
+    if (data) setProducts(data);
+  };
+
+  const handleAddProduct = async (e) => {
+    e.preventDefault();
+    setIsAddingProduct(true);
+    try {
+      const { error } = await supabase
+        .from('products')
+        .insert([{
+          ...newProduct,
+          purchase_price: parseFloat(newProduct.purchase_price) || 0,
+          stock_quantity: parseFloat(newProduct.stock_quantity) || 0,
+          alert_threshold: parseFloat(newProduct.alert_threshold) || 5,
+          project_id: currentProject.id
+        }]);
+      
+      if (error) throw error;
+      setNewProduct({ name: '', purchase_price: '', stock_quantity: '', alert_threshold: 5 });
+      fetchProducts();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsAddingProduct(false);
+    }
+  };
+
+  const handleDeleteProduct = async (id) => {
+    if (!confirm('Supprimer ce produit ?')) return;
+    try {
+      await supabase.from('products').delete().eq('id', id);
+      fetchProducts();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -157,14 +218,19 @@ const Settings = () => {
   };
 
   const handleCreateProject = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!newProjectName) return;
+    setIsCreating(true);
     try {
       await createProject(newProjectName, newProjectType);
       setNewProjectName('');
-      alert('Projet créé !');
+      setShowCreateFlow(false);
+      setCreateStep(1);
+      alert('Projet créé avec succès !');
     } catch (err) {
       alert(err.message);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -174,8 +240,151 @@ const Settings = () => {
     <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header>
         <h1 className="text-3xl font-black tracking-tight">Paramètres</h1>
-        <p className="text-muted-foreground uppercase tracking-widest text-[10px] mt-1">Personnalisez votre MoneyFlow</p>
+        <p className="text-muted-foreground uppercase tracking-widest text-[10px] mt-1">Gérez vos comptes et vos préférences</p>
       </header>
+
+      {/* Projects Management (WhatsApp/Telegram Style Account Switcher) */}
+      <div className="glass-card p-0 overflow-hidden">
+        <div className="p-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+          <div className="flex items-center gap-3 text-primary">
+            <Briefcase size={20} />
+            <h2 className="font-bold uppercase tracking-widest text-xs">Mes Projets</h2>
+          </div>
+          <span className="text-[10px] font-black bg-primary/10 text-primary px-2 py-1 rounded-full">
+            {projects.length} ACTIFS
+          </span>
+        </div>
+
+        <div className="divide-y divide-white/5">
+          {projects.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => selectProject(p)}
+              className="w-full p-5 flex items-center justify-between group transition-all hover:bg-white/[0.03]"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                  currentProject?.id === p.id 
+                  ? 'bg-primary text-white shadow-lg shadow-primary/30' 
+                  : 'bg-white/5 text-muted-foreground group-hover:bg-white/10 group-hover:text-white'
+                }`}>
+                  {p.type === 'continuous' ? <RefreshCcw size={20} /> : p.type === 'investment' ? <TrendingUp size={20} /> : <Target size={20} />}
+                </div>
+                <div className="text-left">
+                  <p className={`font-bold text-sm ${currentProject?.id === p.id ? 'text-white' : 'text-muted-foreground group-hover:text-white'}`}>
+                    {p.name}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+                    {PROJECT_TYPES.find(t => t.id === p.type)?.name || 'Standard'} • {p.role === 'owner' ? 'Propriétaire' : 'Membre'}
+                  </p>
+                </div>
+              </div>
+              {currentProject?.id === p.id && (
+                <div className="bg-primary/20 text-primary px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter animate-pulse">
+                  Actif
+                </div>
+              )}
+            </button>
+          ))}
+
+          {/* Create Flow Toggle Button */}
+          {!showCreateFlow ? (
+            <button
+              onClick={() => setShowCreateFlow(true)}
+              className="w-full p-5 flex items-center gap-4 group transition-all hover:bg-primary/5 text-primary"
+            >
+              <div className="w-12 h-12 rounded-2xl border-2 border-dashed border-primary/30 flex items-center justify-center group-hover:bg-primary/10 group-hover:border-primary/50 transition-all">
+                <Plus size={24} />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm uppercase tracking-widest">Ajouter un nouveau projet</p>
+                <p className="text-[9px] text-primary/60 mt-0.5">Créez un nouvel espace pour vos finances</p>
+              </div>
+            </button>
+          ) : (
+            <div className="p-6 bg-primary/5 border-t-2 border-primary/20 animate-in slide-in-from-top-4 duration-300">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-black text-xs uppercase tracking-[0.2em] text-primary flex items-center gap-2">
+                  <Rocket size={14} /> 
+                  {createStep === 1 ? 'Étape 1: Nom' : 'Étape 2: Logique'}
+                </h3>
+                <button 
+                  onClick={() => {
+                    setShowCreateFlow(false);
+                    setCreateStep(1);
+                  }}
+                  className="text-[10px] font-bold text-muted-foreground hover:text-white uppercase tracking-widest transition-colors"
+                >
+                  Annuler
+                </button>
+              </div>
+
+              {createStep === 1 ? (
+                <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && newProjectName && setCreateStep(2)}
+                    placeholder="Nom du projet (ex: Business Burger)"
+                    className="w-full bg-background border border-primary/20 rounded-xl py-4 px-5 text-lg font-bold focus:border-primary outline-none transition-all"
+                  />
+                  <button
+                    disabled={!newProjectName}
+                    onClick={() => setCreateStep(2)}
+                    className="w-full bg-primary text-white h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-30"
+                  >
+                    Suivant <ChevronRight size={18} />
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="grid grid-cols-1 gap-2">
+                    {PROJECT_TYPES.map(t => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setNewProjectType(t.id)}
+                        className={`flex items-start gap-4 p-4 rounded-xl border transition-all text-left group ${
+                          newProjectType === t.id 
+                          ? 'bg-white text-black border-white shadow-xl scale-[1.02]' 
+                          : 'bg-background border-white/5 hover:border-white/10 text-muted-foreground'
+                        }`}
+                      >
+                        <div className="mt-1 flex items-center justify-center">
+                          {t.id === 'continuous' ? <RefreshCcw size={16} /> : t.id === 'investment' ? <TrendingUp size={16} /> : <Target size={16} />}
+                        </div>
+                        <div>
+                          <p className={`font-bold text-xs uppercase tracking-widest ${newProjectType === t.id ? 'text-black' : 'text-white'}`}>
+                            {t.name}
+                          </p>
+                          <p className="text-[9px] opacity-70 mt-0.5">{t.desc.split(' (')[0]}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => setCreateStep(1)}
+                      className="px-6 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                    >
+                      Retour
+                    </button>
+                    <button
+                      disabled={isCreating}
+                      onClick={handleCreateProject}
+                      className="flex-1 bg-primary text-white h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20"
+                    >
+                      {isCreating ? <Loader2 className="animate-spin" size={18} /> : <><Rocket size={18} /> Lancer le Projet</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Current Project Config Card */}
       <div className="glass-card space-y-6">
@@ -260,50 +469,103 @@ const Settings = () => {
         )}
       </div>
 
-      {/* Create New Project Section */}
-      <div className="glass-card space-y-6 border-primary/20 bg-primary/5">
-        <h2 className="font-bold flex items-center gap-2">
-          Nouveau Projet
-          <span className="text-[8px] bg-primary text-white px-1.5 py-0.5 rounded uppercase tracking-tighter">Premium</span>
-        </h2>
-
-        <form onSubmit={handleCreateProject} className="space-y-6">
-          <div className="space-y-2">
-            <input
-              type="text"
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              className="w-full bg-background border border-white/5 rounded-xl py-3 px-4 focus:border-primary outline-none transition-all text-sm"
-              placeholder="Nom du projet..."
-            />
+      {/* Product Management (Business only) */}
+      {currentProject?.type === 'continuous' && currentProject?.role === 'owner' && (
+        <div className="glass-card space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 text-primary">
+              <Package size={20} />
+              <h2 className="font-bold">Gestion du Stock</h2>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            {PROJECT_TYPES.map(t => (
+          <form onSubmit={handleAddProduct} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-white/5 rounded-2xl border border-white/5">
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Nom du Produit</label>
+              <input
+                required
+                type="text"
+                value={newProduct.name}
+                onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                className="w-full bg-background border border-white/5 rounded-xl py-2 px-4 text-sm focus:border-primary outline-none"
+                placeholder="Ex: Sac de Riz 25kg"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Prix d'Achat (FCFA)</label>
+              <input
+                required
+                type="number"
+                value={newProduct.purchase_price}
+                onChange={(e) => setNewProduct({ ...newProduct, purchase_price: e.target.value })}
+                className="w-full bg-background border border-white/5 rounded-xl py-2 px-4 text-sm focus:border-primary outline-none"
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Stock Initial</label>
+              <input
+                required
+                type="number"
+                value={newProduct.stock_quantity}
+                onChange={(e) => setNewProduct({ ...newProduct, stock_quantity: e.target.value })}
+                className="w-full bg-background border border-white/5 rounded-xl py-2 px-4 text-sm focus:border-primary outline-none"
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Seuil d'Alerte</label>
+              <input
+                required
+                type="number"
+                value={newProduct.alert_threshold}
+                onChange={(e) => setNewProduct({ ...newProduct, alert_threshold: e.target.value })}
+                className="w-full bg-background border border-white/5 rounded-xl py-2 px-4 text-sm focus:border-primary outline-none"
+                placeholder="5"
+              />
+            </div>
+            <div className="flex items-end">
               <button
-                key={t.id}
-                type="button"
-                onClick={() => setNewProjectType(t.id)}
-                className={`flex flex-col gap-2 p-3 rounded-xl border text-center transition-all ${
-                  newProjectType === t.id 
-                  ? 'bg-white text-black border-white' 
-                  : 'bg-white/5 text-muted-foreground border-white/5 hover:border-white/10'
-                }`}
+                type="submit"
+                disabled={isAddingProduct}
+                className="w-full bg-primary text-white h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
               >
-                <p className="font-black text-[10px] uppercase tracking-widest">{t.name}</p>
-                <p className="text-[8px] opacity-70 leading-tight">{t.desc.split(' (')[0]}</p>
+                {isAddingProduct ? <Loader2 className="animate-spin" size={14} /> : <><Plus size={14} /> Ajouter au Stock</>}
               </button>
-            ))}
-          </div>
+            </div>
+          </form>
 
-          <button
-            type="submit"
-            className="w-full bg-white text-black h-12 rounded-xl font-black text-sm hover:bg-gray-200 transition-all cursor-pointer"
-          >
-            Lancer le Projet
-          </button>
-        </form>
-      </div>
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+            {products.map(p => (
+              <div key={p.id} className="flex items-center justify-between p-3 bg-background border border-white/5 rounded-xl group">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold">{p.name}</span>
+                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest">Coût: {new Intl.NumberFormat('fr-FR').format(p.purchase_price)} FCFA</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className={`text-xs font-black ${p.stock_quantity <= p.alert_threshold ? 'text-orange-500' : 'text-green-500'}`}>
+                      {p.stock_quantity} en stock
+                    </p>
+                    <p className="text-[8px] text-muted-foreground uppercase tracking-tighter">Alerte à {p.alert_threshold}</p>
+                  </div>
+                  <button 
+                    onClick={() => handleDeleteProduct(p.id)}
+                    className="p-2 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {products.length === 0 && (
+              <p className="text-center py-4 text-xs text-muted-foreground italic">Aucun produit configuré.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Removed separate create project section as it is now part of Project Management */}
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Savings Goal Section */}

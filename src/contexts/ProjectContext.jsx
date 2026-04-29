@@ -93,6 +93,12 @@ export const ProjectProvider = ({ children, session }) => {
 
   const createProject = useCallback(async (name, type = 'standard') => {
     try {
+      // Ensure profile exists to avoid FK violation in project_members
+      await supabase.from('profiles').upsert({
+        id: session.user.id,
+        full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Utilisateur'
+      }, { onConflict: 'id' });
+
       const { data: project, error: pError } = await supabase
         .from('projects')
         .insert([{ name, type, owner_id: session.user.id }])
