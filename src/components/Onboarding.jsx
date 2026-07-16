@@ -32,14 +32,6 @@ const Onboarding = () => {
       desc: 'Suis l’argent de ton activité au quotidien.',
       details: 'L’argent restant continue le mois suivant.',
       color: 'green'
-    },
-    {
-      id: 'investment',
-      name: 'Investissement',
-      icon: TrendingUp,
-      desc: 'Suis ton argent que tu fais grandir',
-      details: 'Ajoute de l’argent et vois combien tu gagnes au total.',
-      color: 'purple'
     }
   ];
 
@@ -92,7 +84,7 @@ const Onboarding = () => {
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && projectName && setStep(2)}
-                  placeholder="Ex: Finances Perso, Projet Exion, etc."
+                  placeholder="Ex: Commerce, Vente, Finances..."
                   className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 px-6 text-xl font-bold text-center focus:border-primary outline-none transition-all placeholder:text-white/20"
                 />
               </div>

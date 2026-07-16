@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 
 const ProjectContext = createContext();
 
-export const ProjectProvider = ({ children, session }) => {
+export const ProjectProvider = ({ children, session, onReady }) => {
   const [projects, setProjects] = useState([]);
   const [currentProject, setCurrentProject] = useState(null);
   const [members, setMembers] = useState([]);
@@ -82,8 +82,9 @@ export const ProjectProvider = ({ children, session }) => {
     } finally {
       setLoading(false);
       setFetching(false);
+      if (onReady) onReady();
     }
-  }, [session?.user?.id, selectProject]);
+  }, [session?.user?.id, selectProject, onReady]);
 
   useEffect(() => {
     if (session?.user) {
@@ -136,6 +137,23 @@ export const ProjectProvider = ({ children, session }) => {
     }
   }, [fetchProjects]);
 
+  const deleteProject = useCallback(async (projectId) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+      
+      if (error) throw error;
+      
+      localStorage.removeItem('last_project_id');
+      await fetchProjects();
+    } catch (err) {
+      console.error('Error deleting project:', err);
+      throw err;
+    }
+  }, [fetchProjects]);
+
   const value = useMemo(() => ({
     projects, 
     currentProject, 
@@ -144,8 +162,9 @@ export const ProjectProvider = ({ children, session }) => {
     selectProject, 
     createProject,
     updateProject,
+    deleteProject,
     refreshProjects: fetchProjects
-  }), [projects, currentProject, members, loading, selectProject, createProject, updateProject, fetchProjects]);
+  }), [projects, currentProject, members, loading, selectProject, createProject, updateProject, deleteProject, fetchProjects]);
 
   return (
     <ProjectContext.Provider value={value}>

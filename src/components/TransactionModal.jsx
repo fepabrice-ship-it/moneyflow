@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { X, Loader2, Save, Receipt, DollarSign, Calendar, Tag, Check, AlertCircle, Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useProject } from '../contexts/ProjectContext';
+import { logActivity, summarizeTransaction } from '../lib/audit';
 
-const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = null }) => {
+const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = null, initialData = null }) => {
   const { currentProject, members } = useProject();
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
@@ -55,10 +56,10 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
               date: new Date().toISOString().split('T')[0],
               exclude_from_global: false,
               quantity: 1,
-              town: '',
-              product_id: '',
-              payment_status: 'paid',
-              customer_id: ''
+              town: initialData?.town || '',
+              product_id: initialData?.product_id || '',
+              payment_status: initialData?.payment_status || 'paid',
+              customer_id: initialData?.customer_id || ''
             }));
           }
         });
@@ -81,7 +82,21 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
     if (data) setCustomers(data);
   };
 
-  const BUSINESS_CATEGORIES = ['Vente', 'Achats produits', 'Frais de livraison', 'Loyer', 'Electricité', 'Achats divers'];
+  const BUSINESS_CATEGORIES = ['Vente', 'Achats produits', 'Frais de livraison', 'Loyer', 'Electricité', 'Achats divers', 'Salaire', 'Investissement', 'Expédition', 'Transport produits', 'Publicité'];
+
+  // Quels champs afficher selon la catégorie sélectionnée.
+  // Catégorie absente de la table = tous les champs cachés (Salaire, Loyer, etc.).
+  const CATEGORY_FIELDS = {
+    'Vente':              { quantity: true,  town: true,  product: true  },
+    'Achats produits':    { quantity: true,  town: true,  product: true  },
+    'Investissement':     { quantity: true,  town: true,  product: true  },
+    'Expédition':         { quantity: true,  town: true,  product: true  },
+    'Transport produits': { quantity: true,  town: true,  product: true  },
+    'Frais de livraison': { quantity: false, town: true,  product: true  },
+    'Publicité':          { quantity: false, town: true,  product: false },
+  };
+  const selectedCatName = categories.find(c => c.id === formData.category_id)?.name;
+  const fields = CATEGORY_FIELDS[selectedCatName] || { quantity: false, town: false, product: false };
 
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('*').order('name');
@@ -114,6 +129,7 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
 
       let error;
       let transactionId;
+      let savedRow;
 
       if (editingTransaction) {
         const { data, error: updateError } = await supabase
@@ -124,6 +140,7 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
           .single();
         error = updateError;
         transactionId = data?.id;
+        savedRow = data;
       } else {
         const { data, error: insertError } = await supabase
           .from('transactions')
@@ -132,35 +149,41 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
           .single();
         error = insertError;
         transactionId = data?.id;
+        savedRow = data;
       }
 
       if (error) throw error;
 
+      // Journal d'activité (best-effort, n'interrompt pas le flux utilisateur)
+      logActivity({
+        projectId: currentProject.id,
+        action: editingTransaction ? 'update' : 'insert',
+        entityType: 'transaction',
+        entityId: transactionId,
+        summary: `${editingTransaction ? 'Modification' : 'Création'} : ${summarizeTransaction(savedRow || payload)}`,
+        before: editingTransaction || null,
+        after: savedRow || payload,
+      });
+
       // --- STOCK LOGIC ---
+      // Le stock n'est PLUS muté directement dans products.stock_quantity :
+      // il est dérivé en temps réel depuis les transactions (lib/stockUtils.js)
+      // ce qui garantit qu'une suppression/édition de transaction se reflète
+      // automatiquement partout. On garde uniquement la trace stock_movements
+      // qui sert d'historique d'audit dans Anti-vol.
       const selectedCategory = categories.find(c => c.id === formData.category_id);
       if (formData.product_id && !editingTransaction) {
-        const product = products.find(p => p.id === formData.product_id);
-        if (product) {
-          const qty = parseFloat(formData.quantity) || 1;
-          const isVente = selectedCategory?.name === 'Vente';
-          const isAchat = selectedCategory?.name === 'Achats produits';
-          
-          if (isVente || isAchat) {
-            const stockDiff = isVente ? -qty : qty;
-            const newStock = (product.stock_quantity || 0) + stockDiff;
-            
-            // 1. Update product stock
-            await supabase.from('products').update({ stock_quantity: newStock }).eq('id', product.id);
-            
-            // 2. Create stock movement
-            await supabase.from('stock_movements').insert([{
-              product_id: product.id,
-              transaction_id: transactionId,
-              type: isVente ? 'out' : 'in',
-              quantity: qty,
-              reason: isVente ? 'sale' : 'purchase'
-            }]);
-          }
+        const qty = parseFloat(formData.quantity) || 1;
+        const isVente = selectedCategory?.name === 'Vente';
+        const isAchat = selectedCategory?.name === 'Achats produits' || selectedCategory?.name === 'Investissement';
+        if (isVente || isAchat) {
+          await supabase.from('stock_movements').insert([{
+            product_id: formData.product_id,
+            transaction_id: transactionId,
+            type: isVente ? 'out' : 'in',
+            quantity: qty,
+            reason: selectedCategory?.name.toLowerCase()
+          }]);
         }
       }
       
@@ -177,7 +200,7 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-200">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
       
@@ -247,22 +270,24 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
               </div>
 
               {/* Product Selection */}
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Produit concerné (Optionnel)</label>
-                <div className="relative">
-                  <Package className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <select
-                    value={formData.product_id}
-                    onChange={(e) => setFormData({ ...formData, product_id: e.target.value })}
-                    className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none appearance-none transition-all"
-                  >
-                    <option value="">-- Aucun produit --</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name} ({new Intl.NumberFormat('fr-FR').format(p.purchase_price)} FCFA)</option>
-                    ))}
-                  </select>
+              {fields.product && (
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Produit concerné (Optionnel)</label>
+                  <div className="relative">
+                    <Package className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                    <select
+                      value={formData.product_id}
+                      onChange={(e) => setFormData({ ...formData, product_id: e.target.value })}
+                      className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none appearance-none transition-all"
+                    >
+                      <option value="">-- Aucun produit --</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} ({new Intl.NumberFormat('fr-FR').format(p.purchase_price)} FCFA)</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 {/* Category */}
@@ -337,39 +362,45 @@ const TransactionModal = ({ isOpen, onClose, onRefresh, editingTransaction = nul
               )}
 
               {/* Quantity & Town */}
-              <div className={`grid grid-cols-2 gap-3 p-3 rounded-2xl border transition-all duration-300 ${categories.find(c => c.id === formData.category_id)?.name === 'Vente' ? 'bg-primary/5 border-primary/20 scale-[1.02]' : 'bg-transparent border-transparent'}`}>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between px-1">
-                    <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Quantité / Unités</label>
-                    {categories.find(c => c.id === formData.category_id)?.name === 'Vente' && <span className="text-[7px] font-black text-primary uppercase">Requis pour Vente</span>}
-                  </div>
-                  <div className="relative">
-                    <Receipt className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                    <input
-                      type="number"
-                      step="any"
-                      placeholder="1"
-                      value={formData.quantity}
-                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                      className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none transition-all"
-                    />
-                  </div>
-                </div>
+              {(fields.quantity || fields.town) && (
+                <div className={`grid ${fields.quantity && fields.town ? 'grid-cols-2' : 'grid-cols-1'} gap-3 p-3 rounded-2xl border transition-all duration-300 ${selectedCatName === 'Vente' ? 'bg-primary/5 border-primary/20 scale-[1.02]' : 'bg-transparent border-transparent'}`}>
+                  {fields.quantity && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between px-1">
+                        <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Quantité / Unités</label>
+                        {selectedCatName === 'Vente' && <span className="text-[7px] font-black text-primary uppercase">Requis pour Vente</span>}
+                      </div>
+                      <div className="relative">
+                        <Receipt className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="1"
+                          value={formData.quantity}
+                          onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                          className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
 
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Ville</label>
-                  <div className="relative">
-                    <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                    <input
-                      type="text"
-                      placeholder="Ex: Douala"
-                      value={formData.town}
-                      onChange={(e) => setFormData({ ...formData, town: e.target.value })}
-                      className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none transition-all"
-                    />
-                  </div>
+                  {fields.town && (
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Ville</label>
+                      <div className="relative">
+                        <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                        <input
+                          type="text"
+                          placeholder="Ex: Douala"
+                          value={formData.town}
+                          onChange={(e) => setFormData({ ...formData, town: e.target.value })}
+                          className="w-full bg-background border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
 
               {/* Removed Exclusion Toggle - Now handled automatically by category selection */}

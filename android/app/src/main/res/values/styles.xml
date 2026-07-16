@@ -13,12 +13,14 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Le fond de fenêtre est noir : si jamais le système affiche un
+             flash bref avant le splash React, il sera invisible (même couleur
+             que le splash custom #0a0a0a). -->
+        <item name="android:windowBackground">@color/splash_background</item>
     </style>
 
-
-    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/moneyflow_logo</item>
-        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
-    </style>
+    <!-- Launch theme : on n'utilise plus Theme.SplashScreen (qui ajoutait un
+         splash natif explicite avec le logo). Le seul splash visible est
+         maintenant celui que React rend dans SplashScreen.jsx. -->
+    <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar" />
 </resources>

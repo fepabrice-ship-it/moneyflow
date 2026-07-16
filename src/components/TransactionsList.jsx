@@ -24,6 +24,7 @@ import {
 
 import { useProject } from '../contexts/ProjectContext';
 import BulkEditModal from './BulkEditModal';
+import { logActivity, summarizeTransaction } from '../lib/audit';
 
 const TransactionsList = ({ onEdit }) => {
   const { currentProject, members } = useProject();
@@ -50,6 +51,16 @@ const TransactionsList = ({ onEdit }) => {
   useEffect(() => {
     fetchCategories();
   }, []);
+
+  // Verrouille le défilement de la page tant que la fiche détails est ouverte
+  // (évite l'impression que le popup "glisse" avec la page derrière lui).
+  useEffect(() => {
+    if (txForDetails) {
+      const previous = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = previous; };
+    }
+  }, [txForDetails]);
 
   useEffect(() => {
     if (currentProject) {
@@ -108,8 +119,17 @@ const TransactionsList = ({ onEdit }) => {
   const handleDelete = async (id) => {
     if (!confirm('Effacer cette opération ?')) return;
     try {
+      const before = transactions.find(t => t.id === id);
       const { error } = await supabase.from('transactions').delete().eq('id', id);
       if (error) throw error;
+      await logActivity({
+        projectId: currentProject?.id,
+        action: 'delete',
+        entityType: 'transaction',
+        entityId: id,
+        summary: `Suppression : ${summarizeTransaction(before)}`,
+        before,
+      });
       setTransactions(transactions.filter(t => t.id !== id));
       setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
       window.dispatchEvent(new CustomEvent('refresh-data'));
@@ -122,9 +142,20 @@ const TransactionsList = ({ onEdit }) => {
     if (!confirm(`Effacer les ${selectedIds.length} opérations sélectionnées ?`)) return;
     try {
       setLoading(true);
+      const beforeRows = transactions.filter(t => selectedIds.includes(t.id));
       const { error } = await supabase.from('transactions').delete().in('id', selectedIds);
       if (error) throw error;
-      
+
+      // Une entrée de journal par transaction supprimée (pour traçabilité fine)
+      await Promise.all(beforeRows.map(b => logActivity({
+        projectId: currentProject?.id,
+        action: 'delete',
+        entityType: 'transaction',
+        entityId: b.id,
+        summary: `Suppression (lot) : ${summarizeTransaction(b)}`,
+        before: b,
+      })));
+
       setTransactions(transactions.filter(t => !selectedIds.includes(t.id)));
       setSelectedIds([]);
       window.dispatchEvent(new CustomEvent('refresh-data'));
@@ -191,7 +222,7 @@ const TransactionsList = ({ onEdit }) => {
           <p className="text-muted-foreground uppercase tracking-widest text-[10px] mt-1">Historique de vos opérations</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
            {/* View Toggle */}
           <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 h-fit">
             <button 
@@ -616,10 +647,10 @@ const TransactionsList = ({ onEdit }) => {
       {txForDetails && (
         <div className="fixed inset-0 z-[250] flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-300">
            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setTxForDetails(null)} />
-           <div className="relative w-full max-w-sm bg-[#111111] border-t sm:border border-white/10 rounded-t-[2.5rem] sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-full duration-400">
-              <div className="sm:hidden w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 mb-2" />
-              
-              <div className="p-6 pt-2 space-y-6">
+           <div className="relative w-full max-w-sm bg-[#111111] border-t sm:border border-white/10 rounded-t-[2.5rem] sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-full duration-400 max-h-[92vh] flex flex-col">
+              <div className="sm:hidden w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 mb-2 shrink-0" />
+
+              <div className="p-6 pt-2 space-y-6 overflow-y-auto custom-scrollbar">
                  <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${

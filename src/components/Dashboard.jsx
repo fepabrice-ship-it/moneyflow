@@ -9,6 +9,7 @@ import {
   Layers,
   User,
   ChevronDown,
+  ChevronRight,
   AlertTriangle,
   Users,
   Calculator,
@@ -18,8 +19,9 @@ import {
 import { supabase } from '../lib/supabase';
 import { useProject } from '../contexts/ProjectContext';
 import CustomerManagement from './CustomerManagement';
-import Leaderboard from './Leaderboard';
 import DailyClosingModal from './DailyClosingModal';
+import { computeAllProductStocks } from '../lib/stockUtils';
+import { useRefreshTrigger } from '../hooks/useRefreshTrigger';
 
 const Dashboard = (props) => {
   const { currentProject, members } = useProject();
@@ -28,6 +30,7 @@ const Dashboard = (props) => {
   const [safeToSpend, setSafeToSpend] = useState(0);
   const [spent, setSpent] = useState(0);
   const [totalIncome, setTotalIncome] = useState(0);
+  const [profit, setProfit] = useState(0); // Bénéfice réel : ventes - coût des marchandises vendues - charges
   const [investmentBalance, setInvestmentBalance] = useState(0); // Capital - All Expenses
   const [carryOver, setCarryOver] = useState(0);
   const [obligations, setObligations] = useState(0);
@@ -48,11 +51,12 @@ const Dashboard = (props) => {
     }
   }, [currentProject?.id]);
 
+  const refreshTick = useRefreshTrigger();
   useEffect(() => {
     if (currentProject) {
       fetchData();
     }
-  }, [currentProject, viewMode, memberFilter]);
+  }, [currentProject, viewMode, memberFilter, refreshTick]);
 
   const fetchData = async () => {
     try {
@@ -79,7 +83,7 @@ const Dashboard = (props) => {
 
       // Fetch all relevant data for the project
       // Note: Getting category names for all transactions to detect 'Vente' vs 'Investissement'
-      const [obsRes, txRes, txAllRes, profileRes] = await Promise.all([
+      const [obsRes, txRes, txAllRes, profileRes, prodPriceRes] = await Promise.all([
         supabase.from('recurring_obligations')
           .select('amount')
           .eq('project_id', currentProject.id)
@@ -91,19 +95,48 @@ const Dashboard = (props) => {
         supabase.from('profiles')
           .select('monthly_savings_goal')
           .eq('id', currentProject.owner_id)
-          .single()
+          .single(),
+        supabase.from('products')
+          .select('id, purchase_price')
+          .eq('project_id', currentProject.id)
       ]);
 
       const totalObligations = obsRes.data?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
       setObligations(totalObligations);
       setSavingsGoal(profileRes.data?.monthly_savings_goal || 0);
 
+      const productPriceMap = Object.fromEntries(
+        (prodPriceRes.data || []).map(p => [p.id, Number(p.purchase_price || 0)])
+      );
+
       const allTransactions = txAllRes.data || [];
       
       // Filter base transactions by member if applicable
-      const baseFilteredTransactions = memberFilter === 'all' 
-        ? allTransactions 
+      const baseFilteredTransactions = memberFilter === 'all'
+        ? allTransactions
         : allTransactions.filter(tx => tx.user_id === memberFilter);
+
+      // --- COÛT UNITAIRE PAR PRODUIT (coût réel des marchandises) ---
+      // On dérive le coût unitaire empirique depuis TOUTES les entrées de stock
+      // du projet (Achats produits / Investissement / Stock initial), tous
+      // membres confondus : le coût d'un produit ne dépend pas du filtre membre.
+      // C'est plus fiable que products.purchase_price (prix de référence figé).
+      const STOCK_IN_CATS = new Set(['Achats produits', 'Investissement']);
+      const acquisition = {}; // product_id -> { qty, amount }
+      allTransactions.forEach(tx => {
+        if (tx.type !== 'expense' || !tx.product_id) return;
+        if (!STOCK_IN_CATS.has(tx.categories?.name)) return;
+        const q = Number(tx.quantity || 0);
+        if (q <= 0) return;
+        if (!acquisition[tx.product_id]) acquisition[tx.product_id] = { qty: 0, amount: 0 };
+        acquisition[tx.product_id].qty += q;
+        acquisition[tx.product_id].amount += Number(tx.amount || 0);
+      });
+      const unitCostFor = (productId) => {
+        const a = acquisition[productId];
+        if (a && a.qty > 0) return a.amount / a.qty;
+        return Number(productPriceMap[productId] || 0);
+      };
 
       // --- LOGIC: DUAL TRACKING + INVESTMENT BALANCE ---
       // 1. CASH FLOW (What is in the pocket? EVERYTHING counts)
@@ -119,6 +152,18 @@ const Dashboard = (props) => {
       let perfMonthlySp = 0;
       let perfGlobalInc = 0;
       let perfGlobalSp = 0;
+
+      // 2bis. BÉNÉFICE RÉEL (comptabilité d'engagement)
+      //   Bénéfice = revenus opérationnels
+      //             - coût des marchandises VENDUES (COGS, pas les achats de stock)
+      //             - charges d'exploitation (loyer, salaires, pub, livraison...)
+      //   On EXCLUT les achats de stock (Achats produits / Investissement) des
+      //   charges : un achat de stock n'est pas une perte, c'est un actif qui ne
+      //   devient un coût qu'au moment où la marchandise est vendue.
+      let cogsMonthly = 0;
+      let cogsGlobal = 0;
+      let opExpMonthly = 0;
+      let opExpGlobal = 0;
 
       // 3. INVESTMENT LOGIC (Using categories as requested)
       let capitalInGlobal = 0;
@@ -157,9 +202,22 @@ const Dashboard = (props) => {
           if (isIncome) {
             perfGlobalInc += amount;
             if (isCurrentMonth) perfMonthlyInc += amount;
+
+            // COGS : coût des marchandises effectivement vendues sur cette ligne.
+            if (catName === 'Vente' && tx.product_id) {
+              const cogs = (Number(tx.quantity) || 0) * unitCostFor(tx.product_id);
+              cogsGlobal += cogs;
+              if (isCurrentMonth) cogsMonthly += cogs;
+            }
           } else {
             perfGlobalSp += amount;
             if (isCurrentMonth) perfMonthlySp += amount;
+
+            // Charges d'exploitation = dépenses hors acquisition de stock.
+            if (!STOCK_IN_CATS.has(catName)) {
+              opExpGlobal += amount;
+              if (isCurrentMonth) opExpMonthly += amount;
+            }
           }
         }
       });
@@ -175,12 +233,14 @@ const Dashboard = (props) => {
         // Displayed Performance Metrics
         setSpent(perfMonthlySp);
         setTotalIncome(perfMonthlyInc);
+        setProfit(perfMonthlyInc - cogsMonthly - opExpMonthly);
       } else {
         // Global Wallet balance
         setSafeToSpend(cashGlobalInc - cashGlobalSp);
         // Displayed Global Performance Metrics
         setSpent(perfGlobalSp);
         setTotalIncome(perfGlobalInc);
+        setProfit(perfGlobalInc - cogsGlobal - opExpGlobal);
       }
       
       setRecentTransactions(txRes.data || []);
@@ -189,7 +249,7 @@ const Dashboard = (props) => {
       if (currentProject.type === 'continuous') {
         const [stockRes, debtRes] = await Promise.all([
           supabase.from('products')
-            .select('name, stock_quantity, alert_threshold')
+            .select('id, name, stock_quantity, alert_threshold, purchase_price')
             .eq('project_id', currentProject.id),
           supabase.from('transactions')
             .select('amount')
@@ -197,7 +257,14 @@ const Dashboard = (props) => {
             .eq('payment_status', 'unpaid')
         ]);
 
-        setLowStockProducts((stockRes.data || []).filter(p => p.stock_quantity <= p.alert_threshold));
+        const productsList = stockRes.data || [];
+        // Stock dérivé depuis les transactions (source unique de vérité)
+        const stockMap = computeAllProductStocks(allTransactions);
+        setLowStockProducts(
+          productsList
+            .map(p => ({ ...p, derivedStock: stockMap[p.id] ?? 0 }))
+            .filter(p => p.derivedStock <= Number(p.alert_threshold ?? 5))
+        );
         setTotalDebt(debtRes.data?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0);
       }
       
@@ -220,65 +287,54 @@ const Dashboard = (props) => {
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold">Tableau de bord</h1>
               <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter ${
-                isContinuous ? 'bg-green-500/20 text-green-500' : 
-                currentProject?.type === 'investment' ? 'bg-purple-500/20 text-purple-500' : 'bg-white/10 text-muted-foreground'
+                isContinuous ? 'bg-green-500/20 text-green-500' : 'bg-white/10 text-muted-foreground'
               }`}>
-                {isContinuous ? 'Flux Continu' : 
-                currentProject?.type === 'investment' ? 'Investissement' : 'Standard'}
+                {isContinuous ? 'Flux Continu' : 'Standard'}
               </span>
             </div>
             <p className="text-sm text-muted-foreground uppercase tracking-widest mt-1">Aperçu de vos finances</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Member Filter */}
-            <div className="relative group">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
-                <User size={14} />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              {/* Member Filter */}
+              <div className="relative group flex-1 sm:flex-none">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+                  <User size={14} />
+                </div>
+                <select
+                  value={memberFilter}
+                  onChange={(e) => setMemberFilter(e.target.value)}
+                  className="w-full bg-white/5 border border-white/5 rounded-xl py-2 pl-9 pr-8 text-[10px] font-bold uppercase tracking-wider outline-none focus:border-primary appearance-none transition-all cursor-pointer"
+                >
+                  <option value="all">Tous les membres</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>{m.full_name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               </div>
-              <select
-                value={memberFilter}
-                onChange={(e) => setMemberFilter(e.target.value)}
-                className="bg-white/5 border border-white/5 rounded-xl py-2 pl-9 pr-8 text-[10px] font-bold uppercase tracking-wider outline-none focus:border-primary appearance-none transition-all cursor-pointer"
-              >
-                <option value="all">Tous les membres</option>
-                {members.map(m => (
-                  <option key={m.id} value={m.id}>{m.full_name}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            </div>
 
-            {/* View Toggle */}
-            <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
-              <button 
-                onClick={() => setViewMode('monthly')}
-                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
-                  viewMode === 'monthly' ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:text-white'
-                }`}
-              >
-                Mensuel
-              </button>
-              <button 
-                onClick={() => setViewMode('global')}
-                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
-                  viewMode === 'global' ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:text-white'
-                }`}
-              >
-                Global
-              </button>
+              {/* View Toggle */}
+              <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 flex-1 sm:flex-none">
+                <button 
+                  onClick={() => setViewMode('monthly')}
+                  className={`flex-1 sm:px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
+                    viewMode === 'monthly' ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:text-white'
+                  }`}
+                >
+                  Mensuel
+                </button>
+                <button 
+                  onClick={() => setViewMode('global')}
+                  className={`flex-1 sm:px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
+                    viewMode === 'global' ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:text-white'
+                  }`}
+                >
+                  Global
+                </button>
+              </div>
             </div>
-
-            {/* Daily Closing Button (Business only) */}
-            {isContinuous && (
-              <button 
-                onClick={() => setShowClosing(true)}
-                className="bg-white text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-white/5 active:scale-95 transition-all cursor-pointer"
-              >
-                <Calculator size={14} />
-                Clôture
-              </button>
-            )}
           </div>
         </div>
       </header>
@@ -314,7 +370,7 @@ const Dashboard = (props) => {
             )}
 
             <div className="mt-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-8">
-              <div className="grid grid-cols-2 gap-8 flex-1">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 flex-1">
                 <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Revenus</p>
                   <p className="text-xl font-black text-green-500">+{new Intl.NumberFormat('fr-FR').format(totalIncome)}</p>
@@ -322,6 +378,20 @@ const Dashboard = (props) => {
                 <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Dépenses</p>
                   <p className="text-xl font-black text-white">-{new Intl.NumberFormat('fr-FR').format(spent)}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1 flex items-center gap-1">
+                    Bénéfice
+                    <span className="group/benef relative">
+                      <Info size={11} className="text-primary/60" />
+                      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1 w-52 opacity-0 group-hover/benef:opacity-100 transition-opacity bg-black/90 border border-white/10 rounded-lg p-2 text-[9px] font-medium normal-case tracking-normal text-white/80 z-20 shadow-xl">
+                        Revenus des ventes − coût des marchandises vendues − charges (loyer, salaires, pub…). Les achats de stock ne comptent qu'une fois la marchandise vendue.
+                      </span>
+                    </span>
+                  </p>
+                  <p className={`text-xl font-black ${profit >= 0 ? 'text-primary' : 'text-red-500'}`}>
+                    {profit >= 0 ? '+' : ''}{new Intl.NumberFormat('fr-FR').format(Math.round(profit))}
+                  </p>
                 </div>
               </div>
 
@@ -362,7 +432,7 @@ const Dashboard = (props) => {
                   {lowStockProducts.map((p, i) => (
                     <div key={i} className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
                       <span className="text-sm font-bold">{p.name}</span>
-                      <span className="text-xs font-black text-orange-500">{p.stock_quantity} restants</span>
+                      <span className="text-xs font-black text-orange-500">{p.derivedStock} restants</span>
                     </div>
                   ))}
                 </div>
@@ -408,59 +478,58 @@ const Dashboard = (props) => {
         </div>
       )}
 
-      {showClosing && (
-        <DailyClosingModal 
-          isOpen={showClosing} 
-          onClose={() => setShowClosing(false)} 
-          onRefresh={fetchData} 
-        />
-      )}
-
-      {/* Leaderboard (Owner Only) */}
-      {isContinuous && currentProject?.role === 'owner' && (
-        <section className="space-y-4">
-          <Leaderboard />
-        </section>
-      )}
 
       <section className="space-y-4">
         <div className="flex justify-between items-center">
           <div className="flex flex-col">
             <h2 className="text-lg font-bold">Activité Récente</h2>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rentabilité Réelle : {totalIncome - spent >= 0 ? '+' : ''}{new Intl.NumberFormat('fr-FR').format(totalIncome - spent)} FCFA</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Bénéfice : {profit >= 0 ? '+' : ''}{new Intl.NumberFormat('fr-FR').format(Math.round(profit))} FCFA</p>
           </div>
-          <button 
+          <button
             onClick={props.onViewAll}
-            className="text-primary text-xs font-semibold uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
+            className="text-primary text-xs font-semibold uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:opacity-80 hover:translate-x-0.5 transition-all"
           >
-            Tout voir
+            Toutes les transactions <ChevronRight size={14} />
           </button>
         </div>
         <div className="space-y-3">
           {recentTransactions.map((tx) => (
-            <div key={tx.id} className={`glass-card p-4 flex items-center justify-between ${tx.exclude_from_global ? 'border-dashed border-white/20' : ''}`}>
+            <div key={tx.id} className={`glass-card p-4 flex items-center justify-between group hover:border-white/10 transition-all ${tx.exclude_from_global ? 'opacity-60 border-dashed bg-white/5' : ''}`}>
               <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === 'income' ? 'bg-green-500/10 text-green-500' : 'bg-white/5 text-muted-foreground'}`}>
-                  {tx.type === 'income' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${tx.type === 'income' ? 'bg-green-500/10 text-green-500' : 'bg-white/5 text-muted-foreground'}`}>
+                  {tx.type === 'income' ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                 </div>
                 <div>
-                  <p className="font-semibold text-sm flex items-center gap-2">
-                    {tx.description}
-                    {tx.exclude_from_global && (
-                      <span className="px-1 py-0.5 bg-white/5 text-[7px] text-muted-foreground border border-white/10 rounded">Interne</span>
-                    )}
-                  </p>
                   <div className="flex items-center gap-2">
-                    <p className="text-[10px] text-muted-foreground uppercase">{tx.categories?.name || 'Général'}</p>
-                    {tx.quantity > 1 && <span className="text-[9px] font-black text-primary px-1 bg-primary/10 rounded">x{tx.quantity}</span>}
-                    {tx.town && <span className="text-[9px] text-muted-foreground bg-white/5 px-1 rounded flex items-center gap-1"><Globe size={8} /> {tx.town}</span>}
+                    <p className={`font-bold text-sm ${tx.exclude_from_global ? 'line-through text-muted-foreground' : ''}`}>{tx.description}</p>
+                    {tx.exclude_from_global && (
+                      <span className="text-[7px] font-black bg-primary text-white px-1 py-0.5 rounded uppercase">Interne</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter bg-white/5 px-2 py-0.5 rounded">
+                      {tx.categories?.name || 'Général'}
+                    </span>
+                    {tx.quantity > 1 && (
+                      <span className="text-[10px] text-primary font-black bg-primary/10 px-2 py-0.5 rounded">
+                        x{tx.quantity}
+                      </span>
+                    )}
+                    {tx.town && (
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded">
+                        <Globe size={10} />
+                        {tx.town}
+                      </span>
+                    )}
                     <span className="text-[10px] text-white/20">•</span>
-                    <p className="text-[10px] text-primary/70 font-medium">{tx.profiles?.full_name || 'Responsable inconnu'}</p>
+                    <span className="text-[10px] text-primary/70 font-medium">
+                      {tx.profiles?.full_name || 'Inconnu'}
+                    </span>
                   </div>
                 </div>
               </div>
-              <span className={`font-bold ${tx.type === 'income' ? 'text-green-500' : 'text-white'}`}>
-                {tx.type === 'income' ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(tx.amount)} FCFA
+              <span className={`font-black text-base ${tx.exclude_from_global ? 'text-muted-foreground opacity-50' : (tx.type === 'income' ? 'text-green-500' : 'text-white')}`}>
+                {tx.type === 'income' ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(tx.amount)}
               </span>
             </div>
           ))}
