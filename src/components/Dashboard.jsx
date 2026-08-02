@@ -379,16 +379,16 @@ const Dashboard = (props) => {
 
 
       <section className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div className="flex flex-col">
-            <h2 className="text-lg font-bold">Activité Récente</h2>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Bénéfice : {profit >= 0 ? '+' : ''}{new Intl.NumberFormat('fr-FR').format(Math.round(profit))} FCFA</p>
+        <div className="w-full flex justify-between items-center gap-3">
+          <div className="flex flex-col min-w-0">
+            <h2 className="text-sm font-bold">Activité Récente</h2>
+            <p className="text-[9px] text-muted-foreground uppercase tracking-widest truncate">Bénéfice : {profit >= 0 ? '+' : ''}{new Intl.NumberFormat('fr-FR').format(Math.round(profit))} FCFA</p>
           </div>
           <button
             onClick={props.onViewAll}
-            className="text-primary text-xs font-semibold uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:opacity-80 hover:translate-x-0.5 transition-all"
+            className="shrink-0 whitespace-nowrap text-primary text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:opacity-80 hover:translate-x-0.5 transition-all"
           >
-            Toutes les transactions <ChevronRight size={14} />
+            Toutes les transactions <ChevronRight size={12} />
           </button>
         </div>
         <div className="space-y-3">
