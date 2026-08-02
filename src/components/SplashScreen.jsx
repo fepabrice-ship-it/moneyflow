@@ -48,13 +48,14 @@ const SplashScreen = ({ onComplete, ready = true }) => {
           initial={{ y: 12, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.4, ease: 'easeOut' }}
-          className="text-4xl font-black tracking-tighter text-white"
+          className="text-4xl font-black tracking-tighter text-[#ededed]"
         >
           Money<span className="text-primary">Flow</span>
         </motion.h1>
 
         {/* Loading Indicator */}
-        <div className="mt-2 w-40 h-[2px] bg-white/5 rounded-full overflow-hidden">
+        {/* Le splash garde toujours le fond sombre : couleurs figées, pas de thème. */}
+        <div className="mt-2 w-40 h-[2px] bg-[#ededed]/5 rounded-full overflow-hidden">
           <motion.div
             initial={{ x: '-100%' }}
             animate={{ x: '100%' }}
@@ -69,9 +70,9 @@ const SplashScreen = ({ onComplete, ready = true }) => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2, duration: 1 }}
-        className="absolute bottom-10 text-[10px] text-white/20 font-medium tracking-widest uppercase"
+        className="absolute bottom-10 text-[10px] text-[#ededed]/20 font-medium tracking-widest uppercase"
       >
-        Version 1.4.0 • Brayce Edition
+        Version {__APP_VERSION__} • Brayce Edition
       </motion.div>
     </motion.div>
   );

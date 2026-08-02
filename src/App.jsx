@@ -22,6 +22,7 @@ import Inventory from './components/Inventory';
 import AntiVol from './components/AntiVol';
 import Onboarding from './components/Onboarding';
 import PullToRefresh from './components/PullToRefresh';
+import Toast from './components/Toast';
 
 import { ProjectProvider, useProject } from './contexts/ProjectContext';
 import SplashScreen from './components/SplashScreen';
@@ -106,7 +107,7 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
           <div className="mb-8">
             <div className="flex items-center gap-2">
               <img src="/logo.png" alt="Logo" className="w-8 h-8 rounded-lg object-contain" />
-              <h1 className="text-xl font-black tracking-tighter">MoneyFlow <span className="bg-primary/20 text-primary text-[8px] px-1 rounded">V1.5</span></h1>
+              <h1 className="text-xl font-black tracking-tighter">MoneyFlow <span className="bg-primary/20 text-primary text-[8px] px-1 rounded">V{__APP_VERSION__}</span></h1>
             </div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Brayce Edition</p>
           </div>
@@ -120,8 +121,8 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
                 onClick={() => setActiveTab(item.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all cursor-pointer ${
                   activeTab === item.id
-                  ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                  : 'text-muted-foreground hover:bg-white/5 hover:text-white'
+                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                  : 'text-muted-foreground hover:bg-white/5 hover:text-primary-foreground'
                 }`}
               >
                 <item.icon size={20} />
@@ -134,8 +135,8 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
             onClick={() => setActiveTab('settings')}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all cursor-pointer ${
               activeTab === 'settings'
-              ? 'bg-primary text-white shadow-lg shadow-primary/20'
-              : 'text-muted-foreground hover:bg-white/5 hover:text-white'
+              ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+              : 'text-muted-foreground hover:bg-white/5 hover:text-primary-foreground'
             }`}
           >
             <SettingsIcon size={20} />
@@ -157,6 +158,8 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
           {activeTab === 'dashboard' && (
             <Dashboard
               onViewAll={() => setActiveTab('transactions')}
+              onOpenSettings={() => setActiveTab('settings')}
+              onAddTransaction={() => setShowAddModal(true)}
             />
           )}
           {activeTab === 'inventory' && <Inventory />}
@@ -173,7 +176,7 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
       {/* Mobile Sticky Add Button */}
       <button 
         onClick={() => setShowAddModal(true)}
-        className="fixed bottom-24 right-6 lg:bottom-10 lg:right-10 w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center shadow-lg shadow-primary/40 z-50 hover:scale-110 active:scale-95 transition-transform"
+        className="fixed bottom-24 right-6 lg:bottom-10 lg:right-10 w-14 h-14 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-lg shadow-primary/40 z-50 hover:scale-110 active:scale-95 transition-transform"
       >
         <Plus size={28} />
       </button>
@@ -225,6 +228,12 @@ const App = () => {
       return next;
     });
   }, []);
+
+  // Chaque changement d'onglet repart du haut de la page (SPA : sans ça, la
+  // position de scroll de l'onglet précédent est conservée).
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeTab]);
 
   useEffect(() => {
     if (window.innerWidth >= 1024) {
@@ -326,6 +335,7 @@ const App = () => {
   return (
     <>
       {content}
+      <Toast />
       <AnimatePresence>
         {showSplash && (
           <SplashScreen

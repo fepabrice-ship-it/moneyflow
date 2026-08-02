@@ -63,7 +63,7 @@ const InventoryEditModal = ({ isOpen, onClose, product, city, onRefresh }) => {
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-md" onClick={onClose} />
       
       <div className="relative w-full max-w-2xl bg-muted border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col">
         {/* Header */}
@@ -83,7 +83,7 @@ const InventoryEditModal = ({ isOpen, onClose, product, city, onRefresh }) => {
           <div className="flex items-center gap-2">
             <button 
               onClick={() => setIsAddingTransaction(true)}
-              className="w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center hover:bg-primary/90 transition-all active:scale-95 shadow-lg shadow-primary/20"
+              className="w-10 h-10 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:bg-primary/90 transition-all active:scale-95 shadow-lg shadow-primary/20"
             >
               <Plus size={20} />
             </button>

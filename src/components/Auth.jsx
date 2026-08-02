@@ -12,6 +12,19 @@ const GoogleIcon = () => (
   </svg>
 );
 
+// Les messages d'erreur Supabase arrivent en anglais : on les traduit en
+// phrases simples pour un public pas forcément à l'aise avec l'anglais.
+const toFrenchError = (msg = '') => {
+  const m = msg.toLowerCase();
+  if (m.includes('invalid login credentials')) return 'Email ou mot de passe incorrect.';
+  if (m.includes('email not confirmed')) return 'Confirme d\'abord ton email : regarde ta boîte mail.';
+  if (m.includes('user already registered')) return 'Un compte existe déjà avec cet email. Connecte-toi.';
+  if (m.includes('password should be at least')) return 'Le mot de passe doit faire au moins 6 caractères.';
+  if (m.includes('rate limit') || m.includes('too many requests')) return 'Trop d\'essais. Attends un peu puis réessaie.';
+  if (m.includes('network') || m.includes('fetch')) return 'Pas de connexion internet. Vérifie ton réseau.';
+  return msg;
+};
+
 const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -32,7 +45,7 @@ const Auth = () => {
       // Sur web, la redirection OAuth prend le relais ; sur natif,
       // onAuthStateChange dans App.jsx bascule vers l'application.
     } catch (err) {
-      setError(err.message);
+      setError(toFrenchError(err.message));
       setGoogleLoading(false);
     }
   };
@@ -59,7 +72,7 @@ const Auth = () => {
         if (error) throw error;
       }
     } catch (err) {
-      setError(err.message);
+      setError(toFrenchError(err.message));
     } finally {
       setLoading(false);
     }
@@ -89,31 +102,33 @@ const Auth = () => {
             </h2>
             <p className="text-sm text-muted-foreground">
               {isForgot
-                ? 'Entrez votre email pour recevoir un lien de réinitialisation.'
+                ? 'Entre ton email : on t\'envoie un lien pour changer ton mot de passe.'
                 : isSignUp
-                ? 'Commencez à gérer vos finances intelligemment.'
-                : 'Connectez-vous pour suivre vos flux.'}
+                ? 'Crée ton compte en quelques secondes.'
+                : 'Suis ton argent, simplement.'}
             </p>
           </div>
 
           {!isForgot && (
             <div className="space-y-4">
+              {/* Google en action principale : un seul tap, pas de mot de
+                  passe à retenir — le chemin le plus simple. */}
               <button
                 type="button"
                 onClick={handleGoogle}
                 disabled={googleLoading || loading}
-                className="w-full bg-white/5 border border-white/10 h-12 rounded-xl font-semibold flex items-center justify-center gap-3 hover:bg-white/10 transition-colors disabled:opacity-50"
+                className="w-full bg-primary text-primary-foreground h-14 rounded-2xl font-black text-base flex items-center justify-center gap-3 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
               >
                 {googleLoading ? <Loader2 className="animate-spin" size={20} /> : (
                   <>
-                    <GoogleIcon />
+                    <span className="bg-white rounded-full p-1 flex items-center justify-center"><GoogleIcon /></span>
                     Continuer avec Google
                   </>
                 )}
               </button>
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-white/10" />
-                <span className="text-xs text-muted-foreground uppercase tracking-wider">ou</span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wider">ou avec ton email</span>
                 <div className="flex-1 h-px bg-white/10" />
               </div>
             </div>

@@ -99,7 +99,7 @@ const PullToRefresh = ({ onRefresh, children, disabled = false }) => {
         }}
       >
         <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg backdrop-blur-xl border ${
-          armed_for_release ? 'bg-primary text-white border-primary/40' : 'bg-muted/80 text-muted-foreground border-white/10'
+          armed_for_release ? 'bg-primary text-primary-foreground border-primary/40' : 'bg-muted/80 text-muted-foreground border-white/10'
         }`}>
           {refreshing ? (
             <Loader2 size={18} className="animate-spin" />
@@ -115,10 +115,13 @@ const PullToRefresh = ({ onRefresh, children, disabled = false }) => {
         </div>
       </div>
 
-      {/* Contenu décalé par la quantité de pull */}
+      {/* Contenu décalé par la quantité de pull.
+          IMPORTANT : au repos on ne pose AUCUN transform — un ancêtre avec
+          transform devient le référentiel des `position: fixed` descendants,
+          ce qui projetait les modals (fiche détails, etc.) hors de l'écran. */}
       <div
         style={{
-          transform: `translateY(${pull}px)`,
+          transform: pull > 0 ? `translateY(${pull}px)` : 'none',
           transition: refreshing || pull === 0 ? 'transform 0.3s ease' : 'none',
         }}
       >

@@ -114,7 +114,7 @@ const Leaderboard = () => {
               key={opt.id}
               onClick={() => setSortBy(opt.id)}
               className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
-                sortBy === opt.id ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:text-white'
+                sortBy === opt.id ? 'bg-primary text-primary-foreground shadow-lg' : 'text-muted-foreground hover:text-primary-foreground'
               }`}
             >
               {opt.label}

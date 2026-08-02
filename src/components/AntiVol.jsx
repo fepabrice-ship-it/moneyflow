@@ -66,7 +66,7 @@ const AntiVol = ({ onClose }) => {
             onClick={() => setSection(s.id)}
             className={`flex items-center gap-2 px-4 h-11 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
               section === s.id
-                ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
                 : 'bg-white/5 text-muted-foreground hover:text-white border border-white/5'
             }`}
           >
@@ -254,7 +254,7 @@ const ComptageSection = ({ project }) => {
           </div>
           <button
             onClick={startNewAudit}
-            className="flex items-center gap-2 bg-primary text-white px-4 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20 shrink-0"
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20 shrink-0"
           >
             <Plus size={16} /> Démarrer
           </button>
@@ -339,7 +339,7 @@ const ComptageSection = ({ project }) => {
           <button
             onClick={saveAudit}
             disabled={saving}
-            className="w-full bg-primary text-white h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+            className="w-full bg-primary text-primary-foreground h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
           >
             {saving ? <Loader2 className="animate-spin" size={18} /> : <><Save size={16} /> Enregistrer le comptage</>}
           </button>
@@ -691,7 +691,7 @@ const JournalSection = ({ project, members }) => {
               key={a}
               onClick={() => setFilterAction(a)}
               className={`px-3 h-8 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                filterAction === a ? 'bg-primary text-white' : 'bg-white/5 text-muted-foreground hover:text-white'
+                filterAction === a ? 'bg-primary text-primary-foreground' : 'bg-white/5 text-muted-foreground hover:text-white'
               }`}
             >
               {a === 'all' ? 'Tous' : ACTION_META[a].label}

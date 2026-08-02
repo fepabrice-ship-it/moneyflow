@@ -141,7 +141,7 @@ const DailyClosingSection = () => {
 
           <button
             type="submit"
-            className="w-full bg-primary text-white h-12 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20"
+            className="w-full bg-primary text-primary-foreground h-12 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20"
           >
             Vérifier l'Écart <ArrowRight size={16} />
           </button>

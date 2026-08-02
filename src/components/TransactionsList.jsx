@@ -25,6 +25,7 @@ import {
 import { useProject } from '../contexts/ProjectContext';
 import BulkEditModal from './BulkEditModal';
 import { logActivity, summarizeTransaction } from '../lib/audit';
+import { isPerformanceTx, LOAN_REPAYMENT_CATEGORY } from '../lib/finance';
 
 const TransactionsList = ({ onEdit }) => {
   const { currentProject, members } = useProject();
@@ -204,8 +205,15 @@ const TransactionsList = ({ onEdit }) => {
   let totalExpense = 0;
   
   filteredTransactions.forEach(tx => {
-    const isExcluded = tx.exclude_from_global || tx.categories?.name === 'Capital';
-    if (isExcluded) return; // Skip technical/capital/carry-over transactions in performance totals
+    // Remboursement de prêt : déduit des dépenses, pas ajouté aux revenus
+    // (même logique que lib/finance.js).
+    if (tx.type === 'income' && tx.categories?.name === LOAN_REPAYMENT_CATEGORY && !tx.exclude_from_global) {
+      totalExpense -= Number(tx.amount);
+      return;
+    }
+    // Même règle d'exclusion que le Dashboard (lib partagée) : les transactions
+    // internes et les apports de capital ne comptent pas dans la performance.
+    if (!isPerformanceTx(tx)) return;
     if (tx.type === 'income') totalIncome += Number(tx.amount);
     else totalExpense += Number(tx.amount);
   });
@@ -228,7 +236,7 @@ const TransactionsList = ({ onEdit }) => {
             <button 
               onClick={() => setViewMode('monthly')}
               className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${
-                viewMode === 'monthly' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
+                viewMode === 'monthly' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-primary-foreground'
               }`}
             >
               Mensuel
@@ -236,7 +244,7 @@ const TransactionsList = ({ onEdit }) => {
             <button 
               onClick={() => setViewMode('all')}
               className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer ${
-                viewMode === 'all' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
+                viewMode === 'all' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-primary-foreground'
               }`}
             >
               Global
@@ -358,11 +366,11 @@ const TransactionsList = ({ onEdit }) => {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl py-3 pl-10 pr-10 text-xs font-bold uppercase tracking-wider outline-none focus:border-primary appearance-none transition-all text-white"
+              className="w-full bg-muted border border-white/5 rounded-xl py-3 pl-10 pr-10 text-xs font-bold uppercase tracking-wider outline-none focus:border-primary appearance-none transition-all text-white"
             >
-              <option value="all" className="bg-[#1a1a1a]">Toutes les catégories</option>
+              <option value="all" className="bg-muted">Toutes les catégories</option>
               {categories.map(cat => (
-                <option key={cat.id} value={cat.id} className="bg-[#1a1a1a]">{cat.name}</option>
+                <option key={cat.id} value={cat.id} className="bg-muted">{cat.name}</option>
               ))}
             </select>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary pointer-events-none">
@@ -378,11 +386,11 @@ const TransactionsList = ({ onEdit }) => {
             <select
               value={memberFilter}
               onChange={(e) => setMemberFilter(e.target.value)}
-              className="w-full bg-[#1a1a1a] border border-white/5 rounded-xl py-3 pl-10 pr-10 text-xs font-bold uppercase tracking-wider outline-none focus:border-primary appearance-none transition-all text-white"
+              className="w-full bg-muted border border-white/5 rounded-xl py-3 pl-10 pr-10 text-xs font-bold uppercase tracking-wider outline-none focus:border-primary appearance-none transition-all text-white"
             >
-              <option value="all" className="bg-[#1a1a1a]">Tous les membres</option>
+              <option value="all" className="bg-muted">Tous les membres</option>
               {members.map(m => (
-                <option key={m.id} value={m.id} className="bg-[#1a1a1a]">{m.full_name}</option>
+                <option key={m.id} value={m.id} className="bg-muted">{m.full_name}</option>
               ))}
             </select>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary pointer-events-none">
@@ -423,7 +431,7 @@ const TransactionsList = ({ onEdit }) => {
                     <div className="flex items-center gap-2">
                       <p className={`font-bold text-base ${tx.exclude_from_global ? 'line-through text-muted-foreground' : ''}`}>{tx.description}</p>
                       {tx.exclude_from_global && (
-                        <span className="text-[7px] font-black bg-primary text-white px-1 py-0.5 rounded uppercase">Interne</span>
+                        <span className="text-[7px] font-black bg-primary text-primary-foreground px-1 py-0.5 rounded uppercase">Interne</span>
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2 mt-0.5">
@@ -536,7 +544,7 @@ const TransactionsList = ({ onEdit }) => {
                     <button 
                       onClick={() => setShowActionMenu(showActionMenu === tx.id ? null : tx.id)}
                       className={`w-full py-2.5 rounded-xl border text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all ${
-                        showActionMenu === tx.id ? 'bg-primary border-primary text-white' : 'bg-white/5 border-white/5 text-white'
+                        showActionMenu === tx.id ? 'bg-primary border-primary text-primary-foreground' : 'bg-white/5 border-white/5 text-primary-foreground'
                       }`}
                     >
                       Actions <ChevronDown size={14} className={`transition-transform duration-300 ${showActionMenu === tx.id ? 'rotate-180' : ''}`} />
@@ -544,7 +552,7 @@ const TransactionsList = ({ onEdit }) => {
                     
                     {/* Action Dropdown Menu */}
                     {showActionMenu === tx.id && (
-                      <div className="absolute bottom-full left-0 right-0 mb-2 bg-[#1a1a1a] border border-white/10 rounded-2xl p-1.5 shadow-2xl z-50 animate-in slide-in-from-bottom-2 zoom-in-95 duration-200">
+                      <div className="absolute bottom-full left-0 right-0 mb-2 bg-muted border border-white/10 rounded-2xl p-1.5 shadow-2xl z-50 animate-in slide-in-from-bottom-2 zoom-in-95 duration-200">
                         <button 
                           onClick={() => {
                             onEdit(tx);
@@ -597,7 +605,7 @@ const TransactionsList = ({ onEdit }) => {
       {selectedIds.length > 0 && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-3rem)] max-w-lg bg-black/80 backdrop-blur-2xl border border-primary/30 rounded-2xl p-4 shadow-2xl animate-in slide-in-from-bottom-10 duration-300 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white font-black text-xs">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-black text-xs">
               {selectedIds.length}
             </div>
             <div>
@@ -646,8 +654,8 @@ const TransactionsList = ({ onEdit }) => {
       {/* Details View Modal */}
       {txForDetails && (
         <div className="fixed inset-0 z-[250] flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-300">
-           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setTxForDetails(null)} />
-           <div className="relative w-full max-w-sm bg-[#111111] border-t sm:border border-white/10 rounded-t-[2.5rem] sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-full duration-400 max-h-[92vh] flex flex-col">
+           <div className="absolute inset-0 bg-black/30 backdrop-blur-md" onClick={() => setTxForDetails(null)} />
+           <div className="relative w-full max-w-sm bg-muted border-t sm:border border-white/10 rounded-t-[2.5rem] sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-full duration-400 max-h-[92vh] flex flex-col">
               <div className="sm:hidden w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 mb-2 shrink-0" />
 
               <div className="p-6 pt-2 space-y-6 overflow-y-auto custom-scrollbar">
@@ -719,7 +727,7 @@ const TransactionsList = ({ onEdit }) => {
                           onEdit(txForDetails);
                           setTxForDetails(null);
                        }}
-                       className="w-full bg-primary text-white h-12 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-95 transition-all shadow-xl shadow-primary/20"
+                       className="w-full bg-primary text-primary-foreground h-12 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-95 transition-all shadow-xl shadow-primary/20"
                     >
                        <Pencil size={16} /> Modifier l'opération
                     </button>

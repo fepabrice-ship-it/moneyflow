@@ -148,7 +148,7 @@ const Budgets = () => {
                       onChange={(e) => setEditValue(e.target.value)}
                       placeholder="Budget"
                     />
-                    <button onClick={() => handleUpdateBudget(cat.id)} className="p-2 bg-primary text-white rounded-lg hover:opacity-90 cursor-pointer">
+                    <button onClick={() => handleUpdateBudget(cat.id)} className="p-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 cursor-pointer">
                       OK
                     </button>
                     <button onClick={() => setShowEdit(null)} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer">

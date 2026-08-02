@@ -21,12 +21,15 @@ import {
   Tag,
   Pencil,
   Wallet,
-  X
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useProject } from '../contexts/ProjectContext';
 import DailyClosingSection from './DailyClosingSection';
 import Budgets from './Budgets';
 import { computeAllProductStocks, createOpeningStockTransaction } from '../lib/stockUtils';
+import { applyTheme, getTheme } from '../lib/theme';
 
 const PROJECT_TYPES = [
   { 
@@ -78,6 +81,7 @@ const Settings = () => {
   const [isAddingCategory, setIsAddingCategory] = useState(false);
 
   const [showBudgets, setShowBudgets] = useState(false);
+  const [theme, setTheme] = useState(getTheme);
 
   useEffect(() => {
     fetchProfile();
@@ -380,10 +384,10 @@ const Settings = () => {
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
                   currentProject?.id === p.id 
-                  ? 'bg-primary text-white shadow-lg shadow-primary/30' 
+                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30' 
                   : pendingSwitch === p.id
                   ? 'bg-primary/20 text-primary border border-primary/30'
-                  : 'bg-white/5 text-muted-foreground group-hover:bg-white/10 group-hover:text-white'
+                  : 'bg-white/5 text-muted-foreground group-hover:bg-white/10 group-hover:text-primary-foreground'
                 }`}>
                   {p.type === 'continuous' ? <RefreshCcw size={20} /> : <Target size={20} />}
                 </div>
@@ -435,7 +439,7 @@ const Settings = () => {
                   if (p) selectProject(p);
                   setPendingSwitch(null);
                 }}
-                className="w-full bg-primary text-white h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20"
+                className="w-full bg-primary text-primary-foreground h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20"
               >
                 <RefreshCcw size={18} />
                 Changer vers "{projects.find(proj => proj.id === pendingSwitch)?.name}"
@@ -488,7 +492,7 @@ const Settings = () => {
                   <button
                     disabled={!newProjectName}
                     onClick={() => setCreateStep(2)}
-                    className="w-full bg-primary text-white h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-30"
+                    className="w-full bg-primary text-primary-foreground h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-30"
                   >
                     Suivant <ChevronRight size={18} />
                   </button>
@@ -529,7 +533,7 @@ const Settings = () => {
                     <button
                       disabled={isCreating}
                       onClick={handleCreateProject}
-                      className="flex-1 bg-primary text-white h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20"
+                      className="flex-1 bg-primary text-primary-foreground h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20"
                     >
                       {isCreating ? <Loader2 className="animate-spin" size={18} /> : <><Rocket size={18} /> Lancer le Projet</>}
                     </button>
@@ -589,7 +593,7 @@ const Settings = () => {
               <button
                 type="submit"
                 disabled={isUpdating}
-                className="flex-1 bg-primary text-white h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-50"
+                className="flex-1 bg-primary text-primary-foreground h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-50"
               >
                 {isUpdating ? <Loader2 className="animate-spin" size={18} /> : 'Mettre à jour'}
               </button>
@@ -623,7 +627,7 @@ const Settings = () => {
               <button
                 type="submit"
                 disabled={inviting}
-                className="bg-primary text-white px-6 rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer"
+                className="bg-primary text-primary-foreground px-6 rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer"
               >
                 {inviting ? <Loader2 className="animate-spin" size={18} /> : 'Inviter'}
               </button>
@@ -660,7 +664,7 @@ const Settings = () => {
             <button
               type="submit"
               disabled={isAddingCategory}
-              className="bg-primary text-white px-6 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 min-w-[50px]"
+              className="bg-primary text-primary-foreground px-6 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 min-w-[50px]"
             >
               {isAddingCategory ? <Loader2 className="animate-spin" size={14} /> : <Plus size={18} />}
             </button>
@@ -761,7 +765,7 @@ const Settings = () => {
               <button
                 type="submit"
                 disabled={isAddingProduct}
-                className="w-full bg-primary text-white h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                className="w-full bg-primary text-primary-foreground h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
               >
                 {isAddingProduct ? <Loader2 className="animate-spin" size={14} /> : (
                   editingProduct ? <><Save size={14} /> Enregistrer</> : <><Plus size={14} /> Ajouter au Stock</>
@@ -819,27 +823,60 @@ const Settings = () => {
         </div>
       )}
 
-      <form onSubmit={handleSave} className="space-y-6">
-        <div className="glass-card space-y-4">
-          <div className="flex items-center gap-3 text-primary">
-            <Target size={20} />
-            <h2 className="font-bold">Objectifs Financiers</h2>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Objectif Épargne Mensuel (FCFA)</label>
-            <div className="relative">
-              <input
-                type="number"
-                value={profile.monthly_savings_goal}
-                onChange={(e) => setProfile({ ...profile, monthly_savings_goal: parseFloat(e.target.value) || 0 })}
-                className="w-full bg-background border border-white/5 rounded-2xl py-4 px-6 text-xl font-black focus:border-primary outline-none transition-all"
-                placeholder="Ex: 75000"
-              />
-            </div>
-            <p className="text-[10px] text-muted-foreground italic ml-1">C'est le montant que vous souhaitez mettre de côté chaque mois pour vos projets ou tontines.</p>
-          </div>
+      {/* Apparence : appliqué immédiatement, pas besoin d'enregistrer. */}
+      <div className="glass-card space-y-4">
+        <div className="flex items-center gap-3 text-primary">
+          <Sun size={20} />
+          <h2 className="font-bold">Apparence</h2>
         </div>
+        <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
+          <button
+            type="button"
+            onClick={() => { applyTheme('dark'); setTheme('dark'); }}
+            className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2 ${
+              theme === 'dark' ? 'bg-primary text-primary-foreground shadow-lg' : 'text-muted-foreground hover:text-white'
+            }`}
+          >
+            <Moon size={14} /> Sombre
+          </button>
+          <button
+            type="button"
+            onClick={() => { applyTheme('light'); setTheme('light'); }}
+            className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2 ${
+              theme === 'light' ? 'bg-primary text-primary-foreground shadow-lg' : 'text-muted-foreground hover:text-white'
+            }`}
+          >
+            <Sun size={14} /> Clair
+          </button>
+        </div>
+      </div>
+
+      <form onSubmit={handleSave} className="space-y-6">
+        {/* Objectif d'épargne : notion personnelle, sans objet pour un projet
+            business (le suivi s'y fait via capital/bénéfice). Pas de valeur
+            par défaut : 0 signifie « non défini » et le champ reste vide. */}
+        {currentProject?.type !== 'continuous' && (
+          <div className="glass-card space-y-4">
+            <div className="flex items-center gap-3 text-primary">
+              <Target size={20} />
+              <h2 className="font-bold">Objectifs Financiers</h2>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Objectif Épargne Mensuel (FCFA)</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={profile.monthly_savings_goal || ''}
+                  onChange={(e) => setProfile({ ...profile, monthly_savings_goal: parseFloat(e.target.value) || 0 })}
+                  className="w-full bg-background border border-white/5 rounded-2xl py-4 px-6 text-xl font-black focus:border-primary outline-none transition-all"
+                  placeholder="Aucun objectif défini"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground italic ml-1">C'est le montant que vous souhaitez mettre de côté chaque mois pour vos projets ou tontines. Laissez vide si vous n'en voulez pas.</p>
+            </div>
+          </div>
+        )}
 
         <div className="glass-card space-y-4">
           <div className="flex items-center gap-3 text-muted-foreground">

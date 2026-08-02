@@ -5,7 +5,11 @@ export const seedMissingCategories = async () => {
     { name: 'Investissement', type: 'income' },
     { name: 'Expédition', type: 'expense' },
     { name: 'Transport produits', type: 'expense' },
-    { name: 'Publicité', type: 'expense' }
+    { name: 'Publicité', type: 'expense' },
+    // Prêts d'argent : mouvements de caisse uniquement — jamais comptés dans
+    // les revenus/dépenses/bénéfice (voir lib/finance.js CASH_ONLY_CATEGORIES).
+    { name: 'Prêt accordé', type: 'expense' },
+    { name: 'Remboursement de prêt', type: 'income' }
   ];
 
   try {

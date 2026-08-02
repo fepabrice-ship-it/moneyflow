@@ -97,7 +97,7 @@ const CustomerManagement = () => {
         </div>
         <button 
           onClick={() => setShowAddModal(true)}
-          className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-primary/20 cursor-pointer active:scale-95 transition-all"
+          className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-primary/20 cursor-pointer active:scale-95 transition-all"
         >
           <UserPlus size={16} />
           Nouveau Client
@@ -173,7 +173,7 @@ const CustomerManagement = () => {
       {/* Add Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 animate-in fade-in duration-200">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-md" onClick={() => setShowAddModal(false)} />
           <div className="relative w-full max-w-sm bg-muted border border-white/10 rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-bold">Nouveau Client</h3>

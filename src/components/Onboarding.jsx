@@ -1,45 +1,50 @@
 import React, { useState } from 'react';
-import { 
-  Rocket, 
-  ChevronRight, 
-  Target, 
-  RefreshCcw, 
-  TrendingUp,
-  Loader2
-} from 'lucide-react';
+import { Rocket, ChevronRight, Loader2 } from 'lucide-react';
 import { useProject } from '../contexts/ProjectContext';
+
+// Onboarding en 2 étapes, pensé pour des utilisateurs peu à l'aise :
+//   1. D'abord la question concrète (« Tu veux suivre quoi ? ») avec deux
+//      grandes cartes illustrées — pas de jargon type « Standard ».
+//   2. Ensuite un nom PRÉ-REMPLI selon le choix : on peut valider tel quel,
+//      aucune page blanche bloquante.
+const TYPES = [
+  {
+    id: 'continuous',
+    emoji: '💼',
+    name: 'Mon commerce',
+    desc: 'Boutique, ventes, marchandises… Je suis l’argent de mon activité.',
+    defaultName: 'Mon commerce',
+  },
+  {
+    id: 'standard',
+    emoji: '🏠',
+    name: 'Mon argent personnel',
+    desc: 'Salaire, dépenses du mois… Je gère mon argent de tous les jours.',
+    defaultName: 'Mes dépenses',
+  },
+];
 
 const Onboarding = () => {
   const [step, setStep] = useState(1);
   const [projectName, setProjectName] = useState('');
-  const [projectType, setProjectType] = useState('standard');
+  const [projectType, setProjectType] = useState(null);
   const [loading, setLoading] = useState(false);
   const { createProject } = useProject();
 
-  const types = [
-    {
-      id: 'standard',
-      name: 'Standard',
-      icon: Target,
-      desc: 'Gère ton argent du mois (salaire, argent de poche, etc.) chaque mois simplement.',
-      details: 'Chaque nouveau mois recommence à zéro, et tu dois définir ton budget du mois.',
-      color: 'blue'
-    },
-    {
-      id: 'continuous',
-      name: 'Business',
-      icon: RefreshCcw,
-      desc: 'Suis l’argent de ton activité au quotidien.',
-      details: 'L’argent restant continue le mois suivant.',
-      color: 'green'
-    }
-  ];
+  const selectedType = TYPES.find(t => t.id === projectType);
+
+  const chooseType = (t) => {
+    setProjectType(t.id);
+    // Nom proposé par défaut — modifiable à l'étape suivante.
+    setProjectName(t.defaultName);
+    setStep(2);
+  };
 
   const handleLaunch = async () => {
-    if (!projectName) return;
+    if (!projectName.trim()) return;
     setLoading(true);
     try {
-      await createProject(projectName, projectType);
+      await createProject(projectName.trim(), projectType);
     } catch (err) {
       alert(err.message);
       setLoading(false);
@@ -62,114 +67,84 @@ const Onboarding = () => {
           <h1 className="text-4xl font-black tracking-tight text-white">
             Bienvenue sur <span className="text-primary">MoneyFlow</span>
           </h1>
-          <p className="text-muted-foreground uppercase tracking-[0.2em] text-[10px] font-bold">
-            Commençons l'aventure ensemble
+          <p className="text-muted-foreground text-sm">
+            Suis ton argent, simplement.
           </p>
         </div>
 
-        <div className="glass-card p-8 space-y-8 border-white/10 shadow-2xl">
+        <div className="glass-card p-6 sm:p-8 space-y-6 border-white/10 shadow-2xl">
           {step === 1 ? (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <div className="space-y-2 text-center">
-                <h2 className="text-xl font-bold italic">Donnez un nom à votre premier projet</h2>
-                <p className="text-xs text-muted-foreground leading-relaxed px-8">
-                  Que ce soit pour vos dépenses perso ou un business, chaque voyage commence par un nom.
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  autoFocus
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && projectName && setStep(2)}
-                  placeholder="Ex: Commerce, Vente, Finances..."
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 px-6 text-xl font-bold text-center focus:border-primary outline-none transition-all placeholder:text-white/20"
-                />
-              </div>
-
-              <button
-                disabled={!projectName}
-                onClick={() => setStep(2)}
-                className="w-full bg-white text-black h-16 rounded-2xl font-black text-lg flex items-center justify-center gap-3 hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-30 cursor-pointer"
-              >
-                Suivant
-                <ChevronRight size={20} />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <div className="space-y-2 text-center">
-                <h2 className="text-xl font-bold italic">Quelle est la logique du projet ?</h2>
-                <p className="text-xs text-muted-foreground px-4">
-                  Choisissez comment MoneyFlow doit calculer vos soldes.
-                </p>
+              <div className="space-y-1 text-center">
+                <h2 className="text-xl font-bold">Tu veux suivre quoi ?</h2>
+                <p className="text-sm text-muted-foreground">Choisis ce qui te correspond. Tu pourras en créer d'autres après.</p>
               </div>
 
               <div className="space-y-3">
-                {types.map((t) => (
+                {TYPES.map((t) => (
                   <button
                     key={t.id}
-                    onClick={() => setProjectType(t.id)}
-                    className={`w-full flex items-start gap-4 p-4 rounded-2xl border transition-all text-left group ${
-                      projectType === t.id 
-                      ? 'bg-primary/10 border-primary shadow-lg shadow-primary/10 scale-[1.02]' 
-                      : 'bg-white/5 border-white/5 hover:border-white/10'
-                    }`}
+                    onClick={() => chooseType(t)}
+                    className="w-full flex items-center gap-4 p-5 rounded-2xl border bg-white/5 border-white/10 hover:border-primary/50 active:scale-[0.98] transition-all text-left group"
                   >
-                    <div className={`mt-1 p-2 rounded-xl shrink-0 transition-colors ${
-                      projectType === t.id ? 'bg-primary text-white' : 'bg-white/5 text-muted-foreground'
-                    }`}>
-                      <t.icon size={20} />
+                    <span className="text-4xl shrink-0">{t.emoji}</span>
+                    <div className="flex-1">
+                      <p className="font-black text-base">{t.name}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5 leading-snug">{t.desc}</p>
                     </div>
-                    <div>
-                      <p className="font-bold text-sm flex items-center gap-2">
-                        {t.name}
-                        {projectType === t.id && (
-                          <span className="text-[8px] bg-primary/20 text-primary px-1.5 py-0.5 rounded uppercase tracking-tighter">Sélectionné</span>
-                        )}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{t.desc}</p>
-                      <p className={`text-[9px] mt-2 font-medium transition-all ${
-                        projectType === t.id ? 'text-primary' : 'text-blue-400 opacity-0 group-hover:opacity-100'
-                      }`}>
-                        {t.details}
-                      </p>
-                    </div>
+                    <ChevronRight size={20} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
                   </button>
                 ))}
               </div>
+            </div>
+          ) : (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+              <div className="space-y-1 text-center">
+                <span className="text-4xl">{selectedType?.emoji}</span>
+                <h2 className="text-xl font-bold">Donne-lui un nom</h2>
+                <p className="text-sm text-muted-foreground">
+                  On t'en propose un — tu peux le garder ou le changer.
+                </p>
+              </div>
 
-              <div className="pt-4 flex gap-3">
-  <button
-    onClick={() => setStep(1)}
-    className="px-4 h-11 rounded-xl font-medium text-sm bg-white/5 text-muted-foreground hover:bg-white/10 transition-all"
-  >
-    Retour
-  </button>
+              <input
+                type="text"
+                autoFocus
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onKeyDown={(e) => e.key === 'Enter' && projectName.trim() && handleLaunch()}
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 px-6 text-xl font-bold text-center focus:border-primary outline-none transition-all"
+              />
 
-  <button
-    onClick={handleLaunch}
-    disabled={loading}
-    className="flex-1 bg-primary text-white h-11 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-md shadow-primary/20 disabled:opacity-50"
-  >
-    {loading ? (
-      <Loader2 className="animate-spin" size={18} />
-    ) : (
-      <>
-        Lancer
-        <Rocket size={16} />
-      </>
-    )}
-  </button>
-</div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setStep(1)}
+                  className="px-5 h-14 rounded-2xl font-bold text-sm bg-white/5 text-muted-foreground hover:bg-white/10 transition-all"
+                >
+                  Retour
+                </button>
+                <button
+                  onClick={handleLaunch}
+                  disabled={loading || !projectName.trim()}
+                  className="flex-1 bg-primary text-primary-foreground h-14 rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <Loader2 className="animate-spin" size={20} />
+                  ) : (
+                    <>
+                      C'est parti
+                      <Rocket size={18} />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
         </div>
 
-        <p className="text-center text-[10px] text-muted-foreground uppercase tracking-widest font-medium opacity-50">
-          Vous pourrez changer ces paramètres plus tard.
+        <p className="text-center text-xs text-muted-foreground opacity-60">
+          Tu pourras changer tout ça plus tard dans les Paramètres.
         </p>
       </div>
     </div>

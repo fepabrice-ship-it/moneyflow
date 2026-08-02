@@ -16,3 +16,8 @@ dist
 # OS
 .DS_Store
 Thumbs.db
+
+# Artefacts locaux / données sensibles
+*.apk
+dump.sql
+docs/dataviwer.js

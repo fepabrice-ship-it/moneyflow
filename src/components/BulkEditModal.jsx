@@ -65,7 +65,7 @@ const BulkEditModal = ({ isOpen, onClose, selectedIds, onRefresh }) => {
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-md" onClick={onClose} />
       
       <div className="relative w-full max-w-md bg-muted border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
         <div className="p-4 border-b border-white/5 flex justify-between items-center bg-muted">
@@ -156,7 +156,7 @@ const BulkEditModal = ({ isOpen, onClose, selectedIds, onRefresh }) => {
           <button
             type="submit"
             disabled={loading || (!updateFields.town && !updateFields.product)}
-            className="w-full bg-primary text-white h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-primary/20"
+            className="w-full bg-primary text-primary-foreground h-12 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-primary/20"
           >
             {loading ? <Loader2 className="animate-spin" size={20} /> : (
               <>

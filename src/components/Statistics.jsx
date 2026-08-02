@@ -30,16 +30,18 @@ import {
 import { supabase } from '../lib/supabase';
 import { useProject } from '../contexts/ProjectContext';
 import CalculationDetailsModal from './CalculationDetailsModal';
+import { computeProjectStats, isPerformanceTx } from '../lib/finance';
 import InventoryEditModal from './InventoryEditModal';
 import Leaderboard from './Leaderboard';
 import TransactionModal from './TransactionModal';
 import { normalizeCity } from '../lib/cityUtils';
 import { AlertTriangle, TrendingDown as TDIcon, PackageX, ChevronRight, User, MapPin as PinIcon } from 'lucide-react';
 import { useRefreshTrigger } from '../hooks/useRefreshTrigger';
+import { useTheme } from '../hooks/useTheme';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
-const EXCLUDED_FROM_MEMBER_PERF = new Set(['Salaire', 'Capital']);
+const EXCLUDED_FROM_MEMBER_PERF = new Set(['Salaire', 'Capital', 'Prêt accordé', 'Remboursement de prêt']);
 const DEAD_PRODUCT_THRESHOLD_DAYS = 30;
 
 const Statistics = () => {
@@ -64,6 +66,19 @@ const Statistics = () => {
       fetchData();
     }
   }, [currentProject, refreshTick]);
+
+  // Couleurs des graphiques Recharts : les attributs SVG ne résolvent pas les
+  // variables CSS du thème, on choisit donc les couleurs côté JS.
+  const theme = useTheme();
+  const isLight = theme === 'light';
+  const chartUi = {
+    axis: isLight ? '#374151' : '#ffffff',
+    grid: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.03)',
+    cursor: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)',
+    tooltipBg: isLight ? '#ffffff' : '#000000',
+    tooltipBorder: isLight ? '1px solid rgba(0,0,0,0.12)' : '1px solid rgba(255,255,255,0.2)',
+    tooltipText: isLight ? '#111827' : '#ffffff',
+  };
 
   const fetchData = async () => {
     try {
@@ -150,7 +165,6 @@ const Statistics = () => {
 
     let totalRevenue = 0;     // tous revenus opérationnels (hors Capital/exclusions)
     let salesRevenue = 0;     // strictement Vente — utilisé pour AOV et CA strict
-    let totalExpenses = 0;
     let totalPiecesSold = 0;
     let totalSalesCount = 0;
     let totalPublicity = 0;
@@ -180,8 +194,9 @@ const Statistics = () => {
       const city = normalizeCity(tx.town);
       const prodId = tx.product_id;
 
-      // EXCLUSION LOGIC: Capital is Cash Flow, not Performance
-      const isPerformanceExclusion = tx.exclude_from_global || catName === 'Capital';
+      // Même règle que partout (lib partagée) : capital et prêts sont du
+      // cash-flow, pas de la performance.
+      const isPerformanceExclusion = !isPerformanceTx(tx);
 
       if (!cityData[city]) {
         cityData[city] = { 
@@ -216,8 +231,7 @@ const Statistics = () => {
         cityData[city].expense += amount;
         
         // PERFORMANCE TRACKING: All expenses count against profit (except maybe some exclusions)
-        if (!tx.exclude_from_global) {
-          totalExpenses += amount;
+        if (!isPerformanceExclusion) {
           cityData[city].expenseBreakdown[catName] = (cityData[city].expenseBreakdown[catName] || 0) + amount;
           expenseBreakdown[catName] = (expenseBreakdown[catName] || 0) + amount;
 
@@ -276,7 +290,14 @@ const Statistics = () => {
       }
     });
 
-    const netProfit = totalRevenue - totalExpenses;
+    // Bénéfice net : même définition que le Dashboard (lib partagée) —
+    // revenus − coût des marchandises vendues − charges d'exploitation.
+    // (L'ancien « totalRevenue − totalExpenses » comptait les achats de stock
+    // comme des pertes et divergeait du bénéfice affiché sur l'accueil.)
+    const shared = computeProjectStats(transactions, {
+      productPriceMap: Object.fromEntries(products.map(p => [p.id, Number(p.purchase_price || 0)])),
+    });
+    const netProfit = shared.profit;
     // AOV = revenu des Ventes uniquement / nombre de ventes (pas totalRevenue
     // qui inclut Dedommagement, Dette, etc. → gonflerait artificiellement)
     const averageOrderValue = totalSalesCount > 0 ? salesRevenue / totalSalesCount : 0;
@@ -409,6 +430,13 @@ const Statistics = () => {
 
     return {
       totalRevenue, totalPiecesSold, netProfit, totalPublicity, averageOrderValue, totalInventoryValue,
+      cogs: shared.cogs, opex: shared.opex,
+      capital: {
+        invested: shared.capitalInvested,
+        available: shared.available,
+        stockValue: shared.stockValue,
+        remaining: shared.capitalRemaining,
+      },
       memberPerformance,
       productPerformance,
       anomalies: { ventesAPerte: ventesAPerteList, stockNegatif: stockNegatifList },
@@ -456,7 +484,7 @@ const Statistics = () => {
               <button
                 onClick={() => setOpenAnomaly(openAnomaly === 'perte' ? null : 'perte')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${
-                  openAnomaly === 'perte' ? 'bg-red-500 text-white shadow-lg' : 'bg-red-500/10 text-red-500 hover:bg-red-500/15'
+                  openAnomaly === 'perte' ? 'bg-red-500 text-primary-foreground shadow-lg' : 'bg-red-500/10 text-red-500 hover:bg-red-500/15'
                 }`}
               >
                 <TDIcon size={12} /> {stats.anomalies.ventesAPerte.length} vente{stats.anomalies.ventesAPerte.length > 1 ? 's' : ''} à perte
@@ -467,7 +495,7 @@ const Statistics = () => {
               <button
                 onClick={() => setOpenAnomaly(openAnomaly === 'stock' ? null : 'stock')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${
-                  openAnomaly === 'stock' ? 'bg-orange-500 text-white shadow-lg' : 'bg-orange-500/10 text-orange-500 hover:bg-orange-500/15'
+                  openAnomaly === 'stock' ? 'bg-orange-500 text-primary-foreground shadow-lg' : 'bg-orange-500/10 text-orange-500 hover:bg-orange-500/15'
                 }`}
               >
                 <PackageX size={12} /> {stats.anomalies.stockNegatif.length} stock{stats.anomalies.stockNegatif.length > 1 ? 's' : ''} négatif{stats.anomalies.stockNegatif.length > 1 ? 's' : ''}
@@ -560,7 +588,7 @@ const Statistics = () => {
         ))}
       </section>
 
-      {/* Calculation Breakdown Banner */}
+      {/* Calculation Breakdown Banner — même formule que le Dashboard */}
       <section className="glass-card bg-primary/5 border-primary/20 p-4 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 text-center animate-in fade-in zoom-in-95 duration-700">
         <div className="space-y-1">
           <p className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Chiffre d'Affaires</p>
@@ -568,13 +596,79 @@ const Statistics = () => {
         </div>
         <div className="text-primary font-black text-xl">-</div>
         <div className="space-y-1">
-          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Total Dépenses</p>
-          <p className="text-sm font-black text-white">{new Intl.NumberFormat('fr-FR').format(stats.totalRevenue - stats.netProfit)} F</p>
+          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Coût des Ventes</p>
+          <p className="text-sm font-black text-white">{new Intl.NumberFormat('fr-FR').format(Math.round(stats.cogs))} F</p>
+        </div>
+        <div className="text-primary font-black text-xl">-</div>
+        <div className="space-y-1">
+          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground">Charges (pub, salaires…)</p>
+          <p className="text-sm font-black text-white">{new Intl.NumberFormat('fr-FR').format(stats.opex)} F</p>
         </div>
         <div className="text-primary font-black text-xl">=</div>
         <div className="px-6 py-2 bg-primary/10 rounded-2xl border border-primary/20">
           <p className="text-[8px] font-black uppercase tracking-[0.2em] text-primary">Bénéfice Net</p>
-          <p className="text-lg font-black text-primary">{new Intl.NumberFormat('fr-FR').format(stats.netProfit)} F</p>
+          <p className="text-lg font-black text-primary">{new Intl.NumberFormat('fr-FR').format(Math.round(stats.netProfit))} F</p>
+        </div>
+      </section>
+
+      {/* === RESTE DU CAPITAL — décomposition du patrimoine === */}
+      <section className="glass-card p-6 space-y-6">
+        <div className="flex items-center gap-2">
+          <DollarSign className="text-blue-400" size={20} />
+          <h2 className="font-bold">Reste du Capital</h2>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Capital Investi</p>
+            <p className="text-xl font-black text-white">{new Intl.NumberFormat('fr-FR').format(stats.capital.invested)}</p>
+            <p className="text-[8px] text-muted-foreground/60 mt-1 uppercase tracking-tighter">Apports enregistrés</p>
+          </div>
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Argent Disponible</p>
+            <p className={`text-xl font-black ${stats.capital.available >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {new Intl.NumberFormat('fr-FR').format(stats.capital.available)}
+            </p>
+            <p className="text-[8px] text-muted-foreground/60 mt-1 uppercase tracking-tighter">En caisse aujourd'hui</p>
+          </div>
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Stock Restant</p>
+            <p className="text-xl font-black text-orange-500">{new Intl.NumberFormat('fr-FR').format(Math.round(stats.capital.stockValue))}</p>
+            <p className="text-[8px] text-muted-foreground/60 mt-1 uppercase tracking-tighter">Valorisé au coût d'achat</p>
+          </div>
+          <div className="bg-blue-500/10 rounded-2xl p-4 border border-blue-500/20">
+            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Reste du Capital</p>
+            <p className={`text-xl font-black ${stats.capital.remaining >= 0 ? 'text-blue-400' : 'text-red-500'}`}>
+              {new Intl.NumberFormat('fr-FR').format(Math.round(stats.capital.remaining))}
+            </p>
+            <p className="text-[8px] text-muted-foreground/60 mt-1 uppercase tracking-tighter">Argent dispo + stock</p>
+          </div>
+        </div>
+
+        {stats.capital.invested > 0 && (
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+              <span className="text-muted-foreground">Part du capital encore là</span>
+              <span className={stats.capital.remaining >= stats.capital.invested ? 'text-green-500' : 'text-blue-400'}>
+                {Math.round((stats.capital.remaining / stats.capital.invested) * 100)}%
+              </span>
+            </div>
+            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${stats.capital.remaining >= stats.capital.invested ? 'bg-green-500' : 'bg-blue-400'}`}
+                style={{ width: `${Math.max(0, Math.min(100, (stats.capital.remaining / stats.capital.invested) * 100))}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-2xl flex items-start gap-3">
+          <Info size={16} className="text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-[10px] text-muted-foreground leading-relaxed italic">
+            Le reste du capital, c'est ce qu'il reste concrètement de votre investissement : l'argent en caisse plus la marchandise
+            encore en stock (valorisée à son coût d'achat). Quand il dépasse le capital investi, le surplus correspond au bénéfice
+            réalisé ; quand il est en dessous, la différence correspond aux pertes accumulées.
+          </p>
         </div>
       </section>
 
@@ -686,27 +780,27 @@ const Statistics = () => {
                       <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                  <XAxis 
-                    dataKey="name" 
-                    stroke="#ffffff" 
-                    fontSize={10} 
-                    tickLine={false} 
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartUi.grid} vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    stroke={chartUi.axis}
+                    fontSize={10}
+                    tickLine={false}
                     axisLine={false}
                     tickFormatter={(str) => {
                       const d = new Date(str);
                       return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
                     }}
                   />
-                  <YAxis 
-                    stroke="#ffffff" 
-                    fontSize={10} 
-                    tickLine={false} 
-                    axisLine={false} 
+                  <YAxis
+                    stroke={chartUi.axis}
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
                     tickFormatter={(val) => `${val >= 1000 ? (val/1000).toFixed(0) + 'k' : val}`}
                   />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#000000', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '16px', fontSize: '11px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
+                  <Tooltip
+                    contentStyle={{ backgroundColor: chartUi.tooltipBg, border: chartUi.tooltipBorder, borderRadius: '16px', fontSize: '11px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}
                     itemStyle={{ color: '#3b82f6', fontWeight: '900' }}
                     labelStyle={{ color: '#737373', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
                     labelFormatter={(label) => new Date(label).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -792,7 +886,7 @@ const Statistics = () => {
                 <button 
                   type="submit" 
                   disabled={isAddingProduct}
-                  className="w-full bg-primary text-white h-9 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-primary text-primary-foreground h-9 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2"
                 >
                   {isAddingProduct ? <Loader2 className="animate-spin" size={14} /> : (
                     editingProduct ? <><Save size={14} /> Enregistrer</> : <><Plus size={14} /> Ajouter</>
@@ -877,29 +971,29 @@ const Statistics = () => {
             <div className="h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={stats.charts.salesByCity} layout="vertical" margin={{ left: 10, right: 30 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartUi.grid} horizontal={false} />
                   <XAxis type="number" hide />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    stroke="#ffffff" 
-                    fontSize={10} 
-                    tickLine={false} 
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    stroke={chartUi.axis}
+                    fontSize={10}
+                    tickLine={false}
                     axisLine={false}
                     width={80}
                   />
-                  <Tooltip 
-                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                    contentStyle={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', fontSize: '10px' }}
-                    itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+                  <Tooltip
+                    cursor={{fill: chartUi.cursor}}
+                    contentStyle={{ backgroundColor: chartUi.tooltipBg, border: chartUi.tooltipBorder, borderRadius: '12px', fontSize: '10px' }}
+                    itemStyle={{ color: chartUi.tooltipText, fontWeight: 'bold' }}
                     formatter={(val) => [`${new Intl.NumberFormat('fr-FR').format(val)} F`, 'Revenu']}
                   />
                   <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
-                    <LabelList 
-                      dataKey="revenue" 
-                      position="right" 
+                    <LabelList
+                      dataKey="revenue"
+                      position="right"
                       formatter={(val) => `${new Intl.NumberFormat('fr-FR').format(val)} F`}
-                      fill="#ffffff"
+                      fill={chartUi.axis}
                       fontSize={10}
                       fontWeight="bold"
                     />

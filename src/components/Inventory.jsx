@@ -221,7 +221,7 @@ const Inventory = () => {
           {isOwner && !showProductForm && (
             <button
               onClick={() => setShowProductForm(true)}
-              className="flex items-center gap-2 bg-primary text-white px-4 h-10 rounded-xl text-[11px] font-black uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20"
+              className="flex items-center gap-2 bg-primary text-primary-foreground px-4 h-10 rounded-xl text-[11px] font-black uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20"
             >
               <Plus size={16} /> Nouveau produit
             </button>
@@ -229,7 +229,7 @@ const Inventory = () => {
           {isOwner && showProductForm && (
             <button
               onClick={resetForm}
-              className="text-[10px] font-bold text-muted-foreground hover:text-white uppercase tracking-widest transition-colors"
+              className="text-[10px] font-bold text-muted-foreground hover:text-primary-foreground uppercase tracking-widest transition-colors"
             >
               Annuler
             </button>
@@ -289,7 +289,7 @@ const Inventory = () => {
             <div className="md:col-span-2">
               <button
                 type="submit" disabled={isSaving}
-                className="w-full bg-primary text-white h-11 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                className="w-full bg-primary text-primary-foreground h-11 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
               >
                 {isSaving ? <Loader2 className="animate-spin" size={16} /> : (editingProduct ? <><Save size={16} /> Enregistrer</> : <><Plus size={16} /> Ajouter le Produit</>)}
               </button>
@@ -348,7 +348,7 @@ const Inventory = () => {
               {isOwner && !showProductForm && (
                 <button
                   onClick={() => setShowProductForm(true)}
-                  className="inline-flex items-center gap-2 bg-primary text-white px-4 h-10 rounded-xl text-[11px] font-black uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all"
+                  className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 h-10 rounded-xl text-[11px] font-black uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all"
                 >
                   <Plus size={16} /> Créer mon premier produit
                 </button>

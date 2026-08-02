@@ -8,7 +8,7 @@ const CalculationDetailsModal = ({ isOpen, onClose, data, title = "Calcul Global
 
   return (
     <div className="fixed inset-0 z-[400] flex items-center justify-center p-6 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-md" onClick={onClose} />
       
       <div className="relative w-full max-w-xl bg-muted border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col">
         {/* Header */}

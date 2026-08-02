@@ -1,18 +1,47 @@
 @import "tailwindcss";
 
+/* Les couleurs du thème pointent vers des variables indirectes (--app-*).
+   IMPORTANT : ne pas remplacer par des hex directs — Tailwind précalculerait
+   alors les modificateurs d'opacité (bg-white/5 → hex figé) et le mode clair
+   ne s'appliquerait plus à ces classes. */
 @theme {
-  --color-background: #0a0a0a;
-  --color-foreground: #ededed;
+  --color-background: var(--app-background);
+  --color-foreground: var(--app-foreground);
   --color-primary: #3b82f6;
   --color-primary-foreground: #ffffff;
-  --color-muted: #171717;
-  --color-muted-foreground: #a3a3a3;
+  --color-muted: var(--app-muted);
+  --color-muted-foreground: var(--app-muted-foreground);
+  --color-white: var(--app-white);
+  --color-black: var(--app-black);
 
   --font-sans: "Inter", system-ui, sans-serif;
 }
 
 :root {
   color-scheme: dark;
+  --app-background: #0a0a0a;
+  --app-foreground: #ededed;
+  --app-muted: #171717;
+  --app-muted-foreground: #a3a3a3;
+  --app-white: #ffffff;
+  --app-black: #000000;
+}
+
+/* ===== MODE CLAIR =====
+   Le design est écrit avec les primitives du thème sombre (text-white,
+   bg-white/5, bg-black/30…). En mode clair on inverse ces primitives :
+   - « white » devient l'encre (texte fort, surfaces subtiles = encre/5)
+   - « black » devient le papier (voiles de modals clairs)
+   Les éléments qui doivent rester blancs sur fond coloré (boutons primaires)
+   utilisent text-primary-foreground, qui ne change pas. */
+:root.light {
+  color-scheme: light;
+  --app-background: #f3f4f6;
+  --app-foreground: #171717;
+  --app-muted: #ffffff;
+  --app-muted-foreground: #6b7280;
+  --app-white: #111827;
+  --app-black: #f9fafb;
 }
 
 @layer base {
@@ -29,4 +58,23 @@
   .safe-to-spend-glance {
     @apply text-5xl font-bold tracking-tight;
   }
+}
+
+/* En mode clair, les ombres Tailwind par défaut (pensées pour le thème sombre
+   où elles se fondent dans le noir) sont beaucoup trop marquées. On les
+   remplace par des ombres très douces. Règles hors @layer : elles priment sur
+   les utilitaires. Les glows colorés (shadow-primary/20…) sont neutralisés au
+   passage — voulu, ils alourdissent le fond clair. */
+:root.light .shadow-2xl,
+:root.light .glass-card {
+  box-shadow: 0 2px 6px -3px rgb(15 23 42 / 0.05);
+}
+:root.light .shadow-xl {
+  box-shadow: 0 1px 4px -2px rgb(15 23 42 / 0.04);
+}
+:root.light .shadow-lg {
+  box-shadow: 0 1px 3px -1px rgb(15 23 42 / 0.04);
+}
+:root.light .shadow-md {
+  box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.03);
 }

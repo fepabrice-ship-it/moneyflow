@@ -78,7 +78,7 @@ const DailyClosingModal = ({ isOpen, onClose, onRefresh }) => {
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-md" onClick={onClose} />
       
       <div className="relative w-full max-w-md bg-muted border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
         <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/5">
@@ -119,7 +119,7 @@ const DailyClosingModal = ({ isOpen, onClose, onRefresh }) => {
 
               <button 
                 type="submit"
-                className="w-full bg-primary text-white py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                className="w-full bg-primary text-primary-foreground py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all"
               >
                 Calculer l'écart <ArrowRight size={18} />
               </button>
