@@ -28,9 +28,12 @@ export async function signInWithGoogle() {
     await SocialLogin.initialize({ google: { webClientId } });
     initialized = true;
   }
+  // Pas d'option `scopes` : sur Android le plugin exigerait une modification
+  // de la MainActivity native pour les scopes explicites, alors que l'idToken
+  // par défaut contient déjà email + profil — tout ce que Supabase vérifie.
   const res = await SocialLogin.login({
     provider: 'google',
-    options: { scopes: ['email', 'profile'] },
+    options: {},
   });
   const idToken = res?.result?.idToken;
   if (!idToken) {
