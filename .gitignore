@@ -21,3 +21,4 @@ Thumbs.db
 *.apk
 dump.sql
 docs/dataviwer.js
+releases/
