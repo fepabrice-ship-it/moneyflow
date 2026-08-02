@@ -13,6 +13,10 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Android 15+ impose l'edge-to-edge et ignore alors StatusBar.
+             setBackgroundColor : la barre restait noire en mode clair.
+             Cet opt-out rend le contrôle de la couleur à l'application. -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
         <!-- Le fond de fenêtre est noir : si jamais le système affiche un
              flash bref avant le splash React, il sera invisible (même couleur
              que le splash custom #0a0a0a). -->
