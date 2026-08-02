@@ -364,7 +364,7 @@ const Dashboard = (props) => {
       </section>
 
       {showCustomers && (
-        <div className="fixed inset-0 z-[250] bg-muted overflow-y-auto p-6 animate-in slide-in-from-right duration-300">
+        <div className="fixed inset-0 z-[250] bg-muted overflow-y-auto p-6 pt-[calc(1.5rem+var(--status-bar-height,0px))] animate-in slide-in-from-right duration-300">
           <div className="max-w-4xl mx-auto">
             <button 
               onClick={() => { setShowCustomers(false); fetchData(); }}

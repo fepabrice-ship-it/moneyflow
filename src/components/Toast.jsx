@@ -24,7 +24,7 @@ const Toast = () => {
   const isError = toast.type === 'error';
 
   return (
-    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[900] w-[calc(100%-3rem)] max-w-sm pointer-events-none">
+    <div className="fixed top-[calc(1.5rem+var(--status-bar-height,0px))] left-1/2 -translate-x-1/2 z-[900] w-[calc(100%-3rem)] max-w-sm pointer-events-none">
       <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-4 fade-in duration-300 ${
         isError
           ? 'bg-red-500/15 border-red-500/30 text-red-500'

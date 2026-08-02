@@ -72,7 +72,7 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden relative">
       {/* Mobile Fixed Header - TOP LEVEL */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-[100] bg-background/80 backdrop-blur-xl border-b border-white/5 py-4 px-6 flex items-center justify-between shadow-2xl">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-[100] bg-background/80 backdrop-blur-xl border-b border-white/5 pb-4 pt-[calc(1rem+var(--status-bar-height,0px))] px-6 flex items-center justify-between shadow-2xl">
         <div className="flex items-center gap-3">
           <img src="/logo.png" alt="Logo" className="w-8 h-8 rounded-xl object-contain shadow-lg" />
           <h1 className="text-xl font-black tracking-tighter">
@@ -153,7 +153,7 @@ const AppContent = ({ onLogout, onRefresh, showAddModal, setShowAddModal, editin
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 p-6 md:p-10 max-w-5xl mx-auto w-full pb-32 lg:pb-10 pt-20 lg:pt-10">
+        <main className="flex-1 p-6 md:p-10 max-w-5xl mx-auto w-full pb-32 lg:pb-10 pt-[calc(5rem+var(--status-bar-height,0px))] lg:pt-10">
           <PullToRefresh onRefresh={onRefresh}>
           {activeTab === 'dashboard' && (
             <Dashboard

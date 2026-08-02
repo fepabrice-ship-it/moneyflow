@@ -15,15 +15,25 @@ export const getTheme = () => {
   }
 };
 
-// Barre de statut Android : fond assorti au thème, et surtout le bon style
-// d'icônes (Style.Dark = fond sombre → icônes CLAIRES ; Style.Light = fond
-// clair → icônes sombres). Sans ça, heure/wifi/batterie sont illisibles.
+// Barre de statut Android. Depuis Android 15/16, colorer la barre est interdit
+// (edge-to-edge imposé, setBackgroundColor ignoré). La seule approche fiable :
+// l'app dessine DERRIÈRE la barre (overlay) — son fond est alors celui de la
+// page, donc toujours assorti au thème — et l'interface se décale de la
+// hauteur de la barre via la variable CSS --status-bar-height.
+// Le style d'icônes reste piloté ici (Style.Dark = icônes claires, et vice
+// versa), sinon heure/wifi/batterie sont illisibles.
 const syncStatusBar = async (theme) => {
   if (!Capacitor.isNativePlatform()) return;
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar');
-    await StatusBar.setBackgroundColor({ color: theme === 'light' ? '#f3f4f6' : '#0a0a0a' });
+    await StatusBar.setOverlaysWebView({ overlay: true });
     await StatusBar.setStyle({ style: theme === 'light' ? Style.Light : Style.Dark });
+    let height = 28; // repli raisonnable si l'info n'est pas disponible
+    try {
+      const info = await StatusBar.getInfo();
+      if (Number(info?.height) > 0) height = Number(info.height);
+    } catch { /* on garde le repli */ }
+    document.documentElement.style.setProperty('--status-bar-height', `${height}px`);
   } catch {
     // plugin absent (web) ou API indisponible : sans gravité
   }
